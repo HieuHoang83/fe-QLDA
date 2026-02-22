@@ -1,0 +1,40 @@
+{
+  "name": "my-app",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.90.20",
+    "axios": "^1.7.7",
+    "clsx": "^2.1.1",
+    "cookies-next": "^4.2.1",
+    "my-app": "file:",
+    "next": "^14.2.15",
+    "next-auth": "^4.24.7",
+    "next-intl": "^3.17.2",
+    "next-nprogress-bar": "^2.3.13",
+    "primeicons": "^7.0.0",
+    "primereact": "^10.8.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-spinners": "^0.14.1",
+    "redis": "^4.6.15",
+    "sonner": "^2.0.6",
+    "tailwind-merge": "^3.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "eslint": "^8",
+    "eslint-config-next": "^14.2.15",
+    "postcss": "^8",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5"
+  }
+}
