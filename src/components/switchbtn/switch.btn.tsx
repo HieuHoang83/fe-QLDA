@@ -16,7 +16,7 @@ function SwitchTheme() {
         onClick={handleClick}
       >
         <span
-          className={`sun absolute  right-[8px] z-10 dark:hidden block cursor-pointer`}
+          className={`sun absolute bottom-[-2px]  right-[8px] z-10 dark:hidden block cursor-pointer`}
         >
           <i
             className="pi pi-sun"
@@ -25,7 +25,7 @@ function SwitchTheme() {
         </span>
 
         <span
-          className={`moon absolute  left-[7px] z-10 dark:block hidden cursor-pointer`}
+          className={`moon absolute bottom-[-2px]  left-[7px] z-10 dark:block hidden cursor-pointer`}
         >
           <i
             className="pi pi-moon"

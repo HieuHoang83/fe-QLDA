@@ -1,5 +1,4 @@
 "use client";
-import axios, { AxiosResponse } from "axios";
 import { signIn } from "next-auth/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -11,20 +10,7 @@ import SwitchTheme from "../switchbtn/switch.btn";
 import { useThemeContext } from "@/library/ThemeProvider";
 import { useTranslations } from "next-intl";
 import LocalSwitcher from "../SwitchLangue/switcherLangue";
-async function fetchData(url: string, body: any) {
-  // You can await here
-  try {
-    const response: AxiosResponse = await axios.post(url, body);
-
-    return response.data;
-  } catch (error: any) {
-    return {
-      statusCode: error?.response?.data?.statusCode ?? 400,
-      error: error?.response?.data?.error ?? "error",
-      message: error?.response?.data?.message ?? "message",
-    };
-  }
-}
+import { register as registerApi, saveAuth } from "@/services/api/auth";
 function Register() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -44,6 +30,7 @@ function Register() {
       life: 300000,
     });
   };
+
   const handleSubmit = async () => {
     if (errUser.length != 0 || username.length == 0) {
       if (username.length == 0) {
@@ -65,33 +52,57 @@ function Register() {
       return;
     }
 
-    // Add your logic here to call the server to authenticate the user and handle the response.
-    const response = await fetchData(
-      `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/api/v1/auth/registerSystem`,
-      {
-        email: username,
-        name: confirmpassword,
-        password: password,
-      }
-    );
+    const response = await registerApi({
+      username,
+      email: username,
+      password,
+    });
 
-    if (response.error) {
-      showError(response.message);
+    if (response.statusCode !== 200 || !response.data) {
+      // Xử lý các lỗi business theo message trả về
+      if (response.statusCode === 400) {
+        if (response.message.includes("Username already exists")) {
+          showError("Tên đăng nhập đã tồn tại");
+          return;
+        }
+        if (response.message.includes("username")) {
+          setErrUser(
+            "Tên đăng nhập phải từ 3 đến 50 ký tự"
+          );
+        }
+        if (response.message.includes("email")) {
+          setErrUser("Email không hợp lệ");
+        }
+        if (response.message.includes("password")) {
+          setErrpass("Mật khẩu phải có ít nhất 6 ký tự");
+        }
+        return;
+      }
+
+      showError(response.message || "Đăng ký thất bại. Vui lòng thử lại.");
       return;
-    } else {
-      const res = await signIn("credentials", {
-        username: username,
-        password: password,
-        redirect: false,
-      });
+    }
 
-      if (!res?.error) {
-        setUsername("");
-        setPassword("");
-        router.push("/");
-      } else {
-        setErrpass(res?.error);
-      }
+    // Thành công: lưu token và tự đăng nhập
+    saveAuth(response.data, username, username);
+
+    const res = await signIn("credentials", {
+      username,
+      password,
+      redirect: false,
+    });
+
+    if (!res?.error) {
+      setUsername("");
+      setPassword("");
+      setConfirmpassword("");
+      router.push("/");
+    } else {
+      setErrpass(
+        typeof res.error === "string"
+          ? res.error
+          : "Đăng nhập thất bại sau khi đăng ký"
+      );
     }
   };
   const headertitle = () => {
