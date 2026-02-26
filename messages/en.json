@@ -1,33 +1,30 @@
 {
   "HomePage": {
-    "welcome_message": "Let's explore and discover some delicious and unique new dishes together!"
+    "welcome_message": "UNLEASH YOUR ACADEMIC POTENTIAL. SHARE, DISCOVER, MASTER.",
+    "sub_message": "The definitive resource hub for university students. Find the files you need, share what you know."
   },
   "MenuPage": {
-    "welcome_message_title": "Explore the Culinary World",
-    "welcome_message_description": "Discover a wide range of delectable dishes from around the globe. From classNameic comfort foods to exotic regional specialties, our menu offers a tantalizing journey for your taste buds. ",
-     "Menu":"Our Menu ",
-     "Pasta Perfection":"Indulge in our expertly crafted pasta dishes, made with the finest ingredients and authentic techniques.",
-    "Sushi Mastery":"Experience the art of sushi-making with our talented chefs, who create visually stunning and flavorful pieces.",
-    "Smoky BBQ Delights":"Savor the rich flavors of our slow-smoked barbecue dishes, infused with the perfect blend of spices and wood.",
-    "Hearty Veggie Bowl":"A vibrant and nourishing bowl filled with fresh vegetables, protein, and flavorful toppings.",
-    "Mediterranean Quinoa Salad":"A delightful blend of quinoa, olives, feta, and sun-dried tomatoes, tossed in a zesty Mediterranean dressing.",
-    "Crunchy Thai Salad":"A refreshing blend of crisp veggies, roasted peanuts, and a tangy Thai-inspired dressing.",
-     "click_to_menu":"View Our Menu",
-    "click_to_contacts":"Feedback"
+    "welcome_message_title": "Directory of Knowledge",
+    "welcome_message_description": "Dive into an extensive archive of course materials, lecture notes, past exams, and community-driven study guides.",
+    "Menu": "Explore the Archives",
+    "Pasta Perfection": "Engineering & Tech: Comprehensive guides and notes for STEM fields.",
+    "Sushi Mastery": "Business & Economics: Case studies, analytical essays, and market research models.",
+    "Smoky BBQ Delights": "Arts & Humanities: Literature, historical chronicles, and philosophical treatises.",
+    "Hearty Veggie Bowl": "Medical & Life Sciences: Detailed anatomical charts, biology notes, and clinical reviews.",
+    "Mediterranean Quinoa Salad": "Social Sciences: Psychology research, sociology studies, and political science debates.",
+    "Crunchy Thai Salad": "Law & Jurisprudence: Case briefs, legislative drafts, and legal frameworks.",
+    "click_to_menu": "Browse Directory",
+    "click_to_contacts": "Contribute"
   },
-  "LoginPage":{
-   "title1":"Do not have an account ?",
-    "title2":"Please Create Your Acount.",
-    "title3":"It takes less than a minute",
-    "forget":"Forget password ?",
-    "Or Sign Up":"Or Sign Up Using"
+  "LoginPage": {
+    "title1": "Are you new here?",
+    "title2": "Join the Intelligence Layer.",
+    "title3": "Less than a minute to infinite resources.",
+    "forget": "Lost your access key?",
+    "Or Sign Up": "Or Authenticate Using"
   },
- 
-  "RegisterPage":{
-      "title1":"If you have an account? ",
-      "title2":"Login now"
-    
-    }
-    
-
+  "RegisterPage": {
+    "title1": "Already a scholar?",
+    "title2": "Log In Here"
+  }
 }

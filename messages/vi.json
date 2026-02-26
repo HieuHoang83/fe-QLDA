@@ -1,31 +1,30 @@
 {
   "HomePage": {
-    "welcome_message": "Khám phá thế giới ẩm thực "
+    "welcome_message": "KHAI PHÓNG TIỀM NĂNG HỌC THUẬT. CHIA SẺ, KHÁM PHÁ, LÀM CHỦ.",
+    "sub_message": "Trung tâm tài liệu dành cho sinh viên đại học. Tìm kiếm tệp bạn cần, chia sẻ những gì bạn biết."
   },
   "MenuPage": {
-    "welcome_message_title": "Khám phá thế giới ẩm thực",
-    "welcome_message_description": "Khám phá nhiều món ăn ngon từ khắp nơi trên thế giới. Từ các món ăn sang trọng đến các đặc sản vùng miền độc đáo, thực đơn của chúng tôi sẽ mang đến một hành trình hấp dẫn cho vị giác của bạn.",
-    "Menu":"Menu của chúng tôi",
-    "Pasta Perfection":"Thưởng thức các món mỳ Ý do chúng tôi chế biến tinh tế, sử dụng những nguyên liệu tốt nhất và kỹ thuật chế biến truyền thống.",
-    "Sushi Mastery": "Trải nghiệm nghệ thuật chế biến sushi với đội ngũ đầu bếp tài năng của chúng tôi, những người tạo ra những món sushi  đẹp mắt và đậm đà hương vị.",
-    "Smoky BBQ Delights":"Thưởng thức những hương vị thơm ngon của các món nướng BBQ được ướp gia vị hoàn hảo.",
-    "Hearty Veggie Bowl": "Một bát rau củ tươi ngon, đầy dinh dưỡng và các loại topping thơm ngon.",
-    "Mediterranean Quinoa Salad":"Sự hòa quyện tuyệt vời của hạt quinoa, ô liu, phô mai feta và cà chua sấy khô, trộn với nước sốt Địa Trung Hải cay nồng.",
-    "Crunchy Thai Salad": "Sự kết hợp tươi mát của rau củ giòn, lạc nướng với nước sốt mang phong cách Thái.",
-    "click_to_menu":"Xem menu",
-    "click_to_contacts":"Góp ý"
+    "welcome_message_title": "Thư viện Kiến thức",
+    "welcome_message_description": "Đi sâu vào kho lưu trữ đồ sộ gồm các tài liệu khóa học, ghi chú bài giảng, đề thi năm trước và hướng dẫn học tập do cộng đồng đóng góp.",
+    "Menu": "Khám phá Kho lưu trữ",
+    "Pasta Perfection": "Kỹ thuật & Công nghệ: Tài liệu và ghi chú toàn diện cho các ngành STEM.",
+    "Sushi Mastery": "Kinh doanh & Kinh tế: Nghiên cứu tình huống, bài luận phân tích và các mô hình nghiên cứu thị trường.",
+    "Smoky BBQ Delights": "Nghệ thuật & Nhân văn: Các văn bản văn học, biên niên sử lịch sử và các luận thuyết triết học.",
+    "Hearty Veggie Bowl": "Y khoa & Khoa học Sự sống:  Bản đồ giải phẫu chi tiết, ghi chú sinh học và các đánh giá lâm sàng.",
+    "Mediterranean Quinoa Salad": "Khoa học Xã hội: Nghiên cứu tâm lý học, nghiên cứu xã hội học và các cuộc tranh luận khoa học chính trị.",
+    "Crunchy Thai Salad": "Luật & Tư pháp: Các bản tóm tắt hồ sơ vụ án, dự thảo luật và các khuôn khổ pháp lý.",
+    "click_to_menu": "Duyệt Thư mục",
+    "click_to_contacts": "Đóng Góp"
   },
-  "LoginPage":{
-    
-    "title1":"Bạn chưa có tài khoản?",
-    "title2":"Hãy tạo tài khoản của bạn.",
-    "title3":"Việc này chỉ tốn ít phút",
-    "forget":"Quên mật khẩu",
-    "Or Sign Up":"Or Sign Up Using"
+  "LoginPage": {
+    "title1": "Bạn là người mới?",
+    "title2": "Tham gia vào Trạm thông minh.",
+    "title3": "Chưa đến một phút để truy cập vào vô vàn tài nguyên.",
+    "forget": "Quên khóa truy cập?",
+    "Or Sign Up": "Hoặc Xác thực Sử dụng"
   },
-"RegisterPage":{
-    "title1":"Bạn đã có tài khoản ? ",
-    "title2":"Đăng nhập ngay"
+  "RegisterPage": {
+    "title1": "Đã là một học giả?",
+    "title2": "Đăng nhập tại đây"
   }
-  
 }

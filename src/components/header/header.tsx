@@ -52,45 +52,44 @@ function NavigateHome() {
 
   const Setting = ({ isShow = false }) => {
     return (
-      <div className="relative  ml-2">
+      <div className="relative ml-2 z-[60]">
         <button
-          className={`setting-button font-medium ${
-            isShow ? "text-white" : "text-black"
-          } dark:text-gray-200 px-4 py-2 rounded-md w-full `}
+          className={`setting-button font-black uppercase text-base border-2 border-transparent hover:border-black dark:hover:border-white transition-all px-4 py-2 w-full ${
+            isShow ? "text-white bg-black" : "text-black dark:text-white"
+          }`}
           onClick={() => {
             const settingMenu = document.querySelector(".setting-menu");
-            //@ts-ignore
-            settingMenu.classList.toggle("hidden");
+            if (settingMenu) settingMenu.classList.toggle("hidden");
           }}
         >
-          Setting
+          Options
         </button>
-        <div className="setting-menu hidden  bg-white dark:bg-[#4b5563] dark:border shadow-lg  rounded-l-md rounded-b-md  fixed top-[80px] right-[1px] w-[180px] overflow-hidden">
-          <h3 className="text-lg font-medium dark:text-gray-200 border-b  px-3 py-[4px]  cursor-default">
-            Setting Options
+        <div className="setting-menu hidden bg-white dark:bg-black border-4 border-black dark:border-white shadow-[8px_8px_0_0_#000] dark:shadow-[8px_8px_0_0_#fff] fixed top-[80px] right-[10px] w-[200px] z-[60]">
+          <h3 className="text-xl font-black text-black dark:text-white border-b-4 border-black dark:border-white px-4 py-2 cursor-default uppercase bg-[#cbfe00] dark:bg-[#333]">
+            System
           </h3>
-          <ul className=" ">
-            <li className="text-lg py-[5px] flex justify-end items-end border-b pr-3">
+          <ul className="text-black dark:text-white font-bold">
+            <li className="text-lg py-3 flex justify-end items-center border-b-2 border-black dark:border-white pr-4 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
               <SwitchTheme />
             </li>
-            <li className="text-lg py-[4px] pl-4 border-b pr-3">
+            <li className="text-lg py-3 pl-4 border-b-2 border-black dark:border-white pr-4 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
               <LocalSwitcher></LocalSwitcher>
             </li>
 
-            <li className=" border-b text-lg w-full ">
+            <li className="text-lg w-full">
               {session ? (
                 <button
                   onClick={handleLogout}
-                  className="block w-full bg-[#cccccc98] text-center"
+                  className="block w-full bg-[#ff3333] text-white hover:bg-black uppercase font-black py-4 transition-colors"
                 >
-                  Log out
+                  Terminate
                 </button>
               ) : (
                 <Link
                   href={`/${localActive}/auth/login`}
-                  className="block w-full bg-[#cccccc65] hover:bg-[#cccccc48] dark:hover:bg-[#35323243] text-center py-1"
+                  className="flex items-center justify-center w-full bg-black text-white hover:bg-[#cbfe00] hover:text-black uppercase font-black py-4 border-t-2 border-black dark:border-white transition-colors"
                 >
-                  Sign up
+                  Authenticate
                 </Link>
               )}
             </li>
@@ -102,16 +101,16 @@ function NavigateHome() {
 
   return (
     <header>
-      <div className="flex z-50 items-center h-[80px] fixed top-0 left-0 right-0  bg-[#ffc289] dark:bg-[#9e9e9e]">
-        <div className="flex text-xl mr-8 items-center relative w-full sm:ml-auto md:text-2xl md:justify-end lg:text-3xl  ">
+      <div className="flex z-50 items-center h-[80px] fixed top-0 left-0 right-0 bg-white dark:bg-black border-b-4 border-black dark:border-white transition-colors duration-300">
+        <div className="flex text-xl mr-8 items-center relative w-full sm:ml-auto md:text-2xl md:justify-end lg:text-3xl font-black uppercase">
           <Link
-            className="text-black font-medium sm:ml-3 md:ml-8  ml-2 dark:text-gray-200"
+            className="text-black font-extrabold tracking-tighter sm:ml-3 md:ml-8 ml-2 dark:text-white hover:bg-[#cbfe00] dark:hover:text-black px-2 transition-colors"
             href={`/${localActive}`}
           >
             Home
           </Link>
           <Link
-            className="text-black dark:text-gray-200 font-medium sm:ml-3 md:ml-8  ml-2"
+            className="text-black font-extrabold tracking-tighter sm:ml-3 md:ml-8 ml-2 dark:text-white hover:bg-[#ff3333] hover:text-white px-2 transition-colors"
             href={`/${localActive}/menu`}
           >
             Menu
