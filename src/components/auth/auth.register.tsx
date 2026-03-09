@@ -53,41 +53,21 @@ function Register() {
     }
 
     const response = await registerApi({
-      username,
+      username: confirmpassword,
       email: username,
       password,
     });
 
     if (response.statusCode !== 200 || !response.data) {
-      // Xử lý các lỗi business theo message trả về
-      if (response.statusCode === 400) {
-        if (response.message.includes("Username already exists")) {
-          showError("Tên đăng nhập đã tồn tại");
-          return;
-        }
-        if (response.message.includes("username")) {
-          setErrUser(
-            "Tên đăng nhập phải từ 3 đến 50 ký tự"
-          );
-        }
-        if (response.message.includes("email")) {
-          setErrUser("Email không hợp lệ");
-        }
-        if (response.message.includes("password")) {
-          setErrpass("Mật khẩu phải có ít nhất 6 ký tự");
-        }
-        return;
-      }
-
       showError(response.message || "Đăng ký thất bại. Vui lòng thử lại.");
       return;
     }
 
     // Thành công: lưu token và tự đăng nhập
-    saveAuth(response.data, username, username);
+    saveAuth(response.data, confirmpassword, username);
 
     const res = await signIn("credentials", {
-      username,
+      username: confirmpassword,
       password,
       redirect: false,
     });

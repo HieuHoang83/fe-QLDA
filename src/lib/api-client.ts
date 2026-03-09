@@ -50,12 +50,8 @@ function getApiBaseUrl(): string {
 
   let baseUrl = API_URL.trim().replace(/\/$/, "");
 
-  if (!baseUrl.includes("/api/v1")) {
-    if (baseUrl.endsWith("/api")) {
-      baseUrl = `${baseUrl}/v1`;
-    } else {
-      baseUrl = `${baseUrl}/api/v1`;
-    }
+  if (!baseUrl.endsWith("/api")) {
+    baseUrl = `${baseUrl}/api`;
   }
 
   return baseUrl;
@@ -66,7 +62,6 @@ const apiClient: AxiosInstance = axios.create({
   headers: {
     "Content-Type": "application/json",
   },
-  withCredentials: true,
 });
 
 apiClient.interceptors.request.use(
