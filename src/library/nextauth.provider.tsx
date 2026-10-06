@@ -8,7 +8,7 @@ export default function NextAuthWrapper({
 }) {
   return (
     <SessionProvider
-      refetchInterval={24 * 60 * 60}
+      refetchInterval={5 * 60}
       refetchOnWindowFocus={false}
     >
       {children}

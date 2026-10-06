@@ -1,11 +1,35 @@
 import axios, { AxiosInstance } from "axios";
 
-const BASE_URL =
-  process.env.NEXT_PUBLIC_QLDAPM_API_URL ?? "http://localhost:8080";
+const configuredBaseUrl =
+  process.env.NEXT_PUBLIC_QLDAPM_API_URL ??
+  process.env.NEXT_PUBLIC_API_URL ??
+  "http://localhost:3000";
+const BASE_URL = configuredBaseUrl
+  .trim()
+  .replace(/\/+$/, "")
+  .replace(/\/api(?:\/v1)?$/, "");
 
 export interface LoginRequest {
-  username: string;
+  phone: string;
   password: string;
+}
+
+export interface LoginResult {
+  user: {
+    id: string;
+    name: string;
+    phone: string;
+    avatar?: string;
+    role?: string;
+  };
+  token: {
+    access_token: string;
+    refresh_token: string;
+  };
+}
+
+export interface RefreshTokenResult {
+  access_token: string;
 }
 
 export interface RegisterRequest {
@@ -39,10 +63,20 @@ export async function register(
 
 export async function login(
   data: LoginRequest
-): Promise<ApiResponse<string>> {
-  const response = await authClient.post<ApiResponse<string>>(
-    "/api/auth/login",
+): Promise<ApiResponse<LoginResult>> {
+  const response = await authClient.post<ApiResponse<LoginResult>>(
+    "/api/v1/auth/login",
     data
+  );
+  return response.data;
+}
+
+export async function refreshAccessToken(
+  refreshToken: string
+): Promise<ApiResponse<RefreshTokenResult>> {
+  const response = await authClient.post<ApiResponse<RefreshTokenResult>>(
+    "/api/v1/auth/refresh-token",
+    { refreshToken }
   );
   return response.data;
 }
@@ -77,4 +111,3 @@ export const getToken = (): string | null => {
 export const isAuthenticated = (): boolean => {
   return !!getToken();
 };
-

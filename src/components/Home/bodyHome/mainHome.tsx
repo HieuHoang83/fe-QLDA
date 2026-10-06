@@ -1,13 +1,9 @@
 "use client";
 
-import { useSession } from "next-auth/react";
-import Link from "next/link";
-import { useTranslations, useLocale } from "next-intl";
+import { useTranslations } from "next-intl";
 
 function MainHome() {
-  const { status } = useSession({ required: false });
   const t = useTranslations("HomePage");
-  const localActive = useLocale();
 
   const welcomeText = t("welcome_message") || "";
   // Attempt to split welcome message nicely if there are periods, else just show it
@@ -43,21 +39,6 @@ function MainHome() {
             {t("sub_message")}
           </p>
 
-          <div className="flex flex-wrap gap-6 mt-6">
-            <Link href={`/${localActive}/menu`} className="group relative inline-block text-lg font-black uppercase transition-transform hover:-translate-y-1 hover:-translate-x-1">
-              <span className="absolute inset-0 border-4 border-black dark:border-white bg-black dark:bg-white translate-x-2 translate-y-2 transition-transform group-hover:translate-x-3 group-hover:translate-y-3"></span>
-              <span className="relative flex items-center justify-center border-4 border-black dark:border-white bg-[#cbfe00] text-black px-10 py-5">
-                Explore Archives
-              </span>
-            </Link>
-            
-            <Link href={`/${localActive}/auth/login`} className="group relative inline-block text-lg font-black uppercase transition-transform hover:-translate-y-1 hover:-translate-x-1">
-              <span className="absolute inset-0 border-4 border-black dark:border-white bg-black dark:bg-white translate-x-2 translate-y-2 transition-transform group-hover:translate-x-3 group-hover:translate-y-3"></span>
-              <span className="relative flex items-center justify-center border-4 border-black dark:border-white bg-white dark:bg-black dark:text-white text-black px-10 py-5">
-                Contribute Now
-              </span>
-            </Link>
-          </div>
         </div>
 
         {/* Right Column: Visual Elements */}
