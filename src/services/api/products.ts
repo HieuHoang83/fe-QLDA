@@ -15,6 +15,17 @@ export interface HaravanInventoryAdvance {
   qty_incoming?: number;
 }
 
+export interface HaravanVariantUnit {
+  id?: number;
+  unit?: string;
+  base?: boolean;
+  sellable?: boolean;
+  ratio?: number;
+  barcode?: string;
+  sku?: string;
+  price?: number;
+}
+
 export interface HaravanProductVariant {
   id?: number;
   product_id?: number;
@@ -36,6 +47,7 @@ export interface HaravanProductVariant {
   option1?: string | null;
   option2?: string | null;
   option3?: string | null;
+  variant_units?: HaravanVariantUnit[] | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -122,6 +134,19 @@ export function getProduct(
     orgId,
     `/products/${productId}`,
     token
+  );
+}
+
+export function createProduct(
+  token: string,
+  orgId: string,
+  product: Partial<HaravanProduct>
+): Promise<HaravanProductResult> {
+  return haravanRequest<HaravanProductResult>(
+    orgId,
+    "/products",
+    token,
+    { method: "POST", body: { product } }
   );
 }
 

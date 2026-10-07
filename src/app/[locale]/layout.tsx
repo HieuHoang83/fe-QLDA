@@ -37,7 +37,7 @@ export default async function LocaleLayout({
                   <ThemeProvider>
                     <Themefull>
                       {children}
-                      <Toaster />
+                      <Toaster position="top-right" offset={16} richColors closeButton />
                     </Themefull>
                   </ThemeProvider>
                 </ShopProvider>

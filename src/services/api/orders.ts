@@ -173,6 +173,33 @@ export interface OrderDetails {
   events: OrderEvent[];
 }
 
+export interface CreateOrderInput {
+  line_items: Array<{
+    variant_id?: number;
+    title?: string;
+    price?: number;
+    quantity: number;
+    total_discount?: number;
+    applied_discounts?: Array<{ description: string; amount: number }>;
+  }>;
+  discount_codes?: Array<{ code: string; is_coupon_code: boolean; amount?: number }>;
+  total_discounts?: number;
+  financial_status?: "pending" | "paid";
+  gateway?: string;
+  is_cod_gateway?: boolean;
+  note_attributes?: Array<{ name: string; value: string }>;
+  customer_id?: number;
+  email?: string;
+  phone?: string;
+  note?: string;
+  first_name?: string;
+  last_name?: string;
+  address1?: string;
+  city?: string;
+  province?: string;
+  country?: string;
+}
+
 function getErrorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
     const responseMessage = (error as AxiosError<{ message?: string | string[] }>)
@@ -279,4 +306,15 @@ export function confirmOrder(
       body: { actor, force: true },
     }
   );
+}
+
+export function createOrder(
+  token: string,
+  orgId: string,
+  body: CreateOrderInput
+): Promise<OrderRecord> {
+  return request<OrderRecord>(`/${encodeURIComponent(orgId)}/create`, token, {
+    method: "POST",
+    body,
+  });
 }

@@ -40,6 +40,7 @@ export type VariantPayload = Partial<
     | "taxable"
     | "position"
     | "image_id"
+    | "variant_units"
   >
 >;
 

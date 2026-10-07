@@ -2,14 +2,17 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useLocale } from "next-intl";
+import { toast } from "sonner";
 import { useShop } from "@/context/ShopContext";
 import HaravanShell from "@/components/haravan/HaravanShell";
 import DataTable, { type DataTableColumn } from "@/components/ui/DataTable";
 import {
   listProducts,
   countProducts,
+  createProduct,
   updateProduct,
   type HaravanProduct,
 } from "@/services/api/products";
@@ -37,7 +40,7 @@ function emptyForm(product: HaravanProduct): ProductFormState {
   };
 }
 
-function ProductEditDialog({
+export function ProductEditDialog({
   product,
   saving,
   onClose,
@@ -67,10 +70,10 @@ function ProductEditDialog({
         <header className="flex items-start justify-between gap-4 border-b border-[#eef0ea] px-6 py-4 dark:border-[#363b31]">
           <div className="min-w-0">
             <p className="text-xs font-bold uppercase tracking-[0.15em] text-[#71836a]">
-              Cập nhật sản phẩm
+              {product.id ? "Cập nhật sản phẩm" : "Thêm sản phẩm"}
             </p>
             <h2 id="product-edit-title" className="mt-1 truncate text-xl font-extrabold">
-              {product.title || `Sản phẩm #${product.id}`}
+              {product.title || (product.id ? `Sản phẩm #${product.id}` : "Sản phẩm mới")}
             </h2>
           </div>
           <button
@@ -153,7 +156,7 @@ function ProductEditDialog({
               className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#527b49] px-5 text-sm font-bold text-white hover:bg-[#41643a] disabled:cursor-wait disabled:opacity-60"
             >
               {saving && <i className="pi pi-spin pi-spinner" aria-hidden="true" />}
-              Lưu thay đổi
+              {product.id ? "Lưu thay đổi" : "Tạo sản phẩm"}
             </button>
           </div>
         </form>
@@ -166,6 +169,7 @@ export default function ProductsPage() {
   const { data: session } = useSession();
   const { currentShop } = useShop();
   const locale = useLocale();
+  const router = useRouter();
   const orgId = currentShop.orgId;
 
   const [products, setProducts] = useState<HaravanProduct[]>([]);
@@ -175,7 +179,6 @@ export default function ProductsPage() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
   const [editing, setEditing] = useState<HaravanProduct | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -230,28 +233,44 @@ export default function ProductsPage() {
   }, [products, search]);
 
   async function handleSave(form: ProductFormState) {
-    if (!token || !editing?.id) return;
+    if (!token || !orgId) return;
     setSaving(true);
-    setNotice("");
     try {
-      const result = await updateProduct(token, orgId, editing.id, {
-        title: form.title,
-        vendor: form.vendor,
-        product_type: form.product_type,
-        tags: form.tags,
-      });
-      setProducts((prev) =>
-        prev.map((product) =>
-          product.id === result.product.id ? result.product : product
-        )
-      );
-      setEditing(null);
-      setNotice(`Đã cập nhật sản phẩm "${result.product.title}".`);
+      if (editing?.id) {
+        const result = await updateProduct(token, orgId, editing.id, {
+          title: form.title,
+          vendor: form.vendor,
+          product_type: form.product_type,
+          tags: form.tags,
+        });
+        setProducts((prev) =>
+          prev.map((product) =>
+            product.id === result.product.id ? result.product : product
+          )
+        );
+        setEditing(null);
+        toast.success(`Đã cập nhật sản phẩm "${result.product.title}".`);
+      } else {
+        const result = await createProduct(token, orgId, {
+          title: form.title,
+          vendor: form.vendor,
+          product_type: form.product_type,
+          tags: form.tags,
+        });
+        setProducts((prev) => [result.product, ...prev]);
+        setTotal((prev) => prev + 1);
+        setEditing(null);
+        toast.success(`Đã tạo sản phẩm "${result.product.title}".`, {
+          description: result.product.handle ?? "",
+        });
+      }
     } catch (saveError) {
-      setNotice(
+      toast.error(
         saveError instanceof Error
           ? saveError.message
-          : "Không cập nhật được sản phẩm."
+          : editing?.id
+            ? "Không cập nhật được sản phẩm."
+            : "Không tạo được sản phẩm."
       );
     } finally {
       setSaving(false);
@@ -384,33 +403,6 @@ export default function ProductsPage() {
         </span>
       ),
     },
-    {
-      key: "actions",
-      header: "Thao tác",
-      width: 180,
-      align: "right",
-      cell: (product) => (
-        <div className="flex items-center justify-end gap-2">
-          {product.id && (
-            <Link
-              href={`/${locale}/products/${product.id}`}
-              className="inline-flex items-center gap-2 rounded-lg border border-[#e5e7df] px-3 py-2 text-xs font-semibold text-[#596052] transition hover:bg-[#f3f5ef] dark:border-[#40453b] dark:text-[#d3d8ce] dark:hover:bg-[#30342e]"
-            >
-              <i className="pi pi-th-large" aria-hidden="true" />
-              Biến thể
-            </Link>
-          )}
-          <button
-            type="button"
-            onClick={() => setEditing(product)}
-            className="inline-flex items-center gap-2 rounded-lg border border-[#e5e7df] px-3 py-2 text-xs font-semibold text-[#596052] transition hover:bg-[#f3f5ef] dark:border-[#40453b] dark:text-[#d3d8ce] dark:hover:bg-[#30342e]"
-          >
-            <i className="pi pi-pencil" aria-hidden="true" />
-            Sửa
-          </button>
-        </div>
-      ),
-    },
   ];
 
   return (
@@ -418,18 +410,6 @@ export default function ProductsPage() {
       fill
       title="Quản lý sản phẩm"
     >
-      {notice && (
-        <div
-          role="status"
-          className="mb-4 flex shrink-0 items-start justify-between gap-4 rounded-xl border border-[#dce9dc] bg-[#f6fbf5] px-4 py-3 text-sm text-[#426a40] dark:border-[#354736] dark:bg-[#202820] dark:text-[#b4cfb3]"
-        >
-          <span>{notice}</span>
-          <button type="button" onClick={() => setNotice("")} aria-label="Đóng">
-            <i className="pi pi-times" aria-hidden="true" />
-          </button>
-        </div>
-      )}
-
       <DataTable
         columns={columns}
         rows={filtered}
@@ -439,8 +419,11 @@ export default function ProductsPage() {
         total={total}
         loading={loading}
         error={error}
-        minWidth={1200}
+        minWidth={1080}
         paginationLabel="sản phẩm"
+        onRowClick={(product) => {
+          if (product.id) router.push(`/${locale}/products/${product.id}`);
+        }}
         emptyIcon="pi-box"
         emptyTitle="Không có sản phẩm"
         emptyHint="Thử đổi từ khóa tìm kiếm hoặc shop."
@@ -469,6 +452,14 @@ export default function ProductsPage() {
               <span className="text-sm text-[#858a80] dark:text-[#aeb4a8]">
                 {loading ? "Đang tải..." : `${total} sản phẩm`}
               </span>
+              <button
+                type="button"
+                onClick={() => setEditing({} as HaravanProduct)}
+                className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#527b49] px-4 text-sm font-bold text-white hover:bg-[#41643a]"
+              >
+                <i className="pi pi-plus" aria-hidden="true" />
+                Thêm sản phẩm
+              </button>
               <button
                 type="button"
                 onClick={() => void load()}

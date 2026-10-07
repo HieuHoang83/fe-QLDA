@@ -3,6 +3,8 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { signIn, signOut, useSession } from "next-auth/react";
 import { useLocale } from "next-intl";
+import { toast } from "sonner";
+import { useShop } from "@/context/ShopContext";
 import {
   confirmOrder,
   CustomerOrderType,
@@ -16,6 +18,7 @@ import {
 } from "@/services/api/orders";
 import HaravanHeader from "@/components/haravan/HaravanHeader";
 import OrderDetailDialog from "./OrderDetailDialog";
+import CreateOrderDialog from "./CreateOrderDialog";
 import OrdersTable from "./OrdersTable";
 import { ConfirmationStatus, orderCode } from "./orders.utils";
 
@@ -85,6 +88,7 @@ function LoginForm() {
 export default function OrdersDashboard() {
   const { data: session, status: sessionStatus } = useSession();
   const locale = useLocale();
+  const { currentShop } = useShop();
   const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -104,7 +108,7 @@ export default function OrdersDashboard() {
   const [events, setEvents] = useState<OrderEvent[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
   const [confirmingOrder, setConfirmingOrder] = useState<string | null>(null);
-  const [notice, setNotice] = useState("");
+  const [createOrderOpen, setCreateOrderOpen] = useState(false);
 
   const loadOrders = useCallback(async () => {
     const token = session?.access_token;
@@ -158,7 +162,11 @@ export default function OrdersDashboard() {
       });
       setEvents(result.events);
     } catch (detailError) {
-      setNotice(detailError instanceof Error ? detailError.message : "Không tải được chi tiết đơn hàng.");
+      toast.error(
+        detailError instanceof Error
+          ? detailError.message
+          : "Không tải được chi tiết đơn hàng."
+      );
     } finally {
       setDetailLoading(false);
     }
@@ -168,20 +176,27 @@ export default function OrdersDashboard() {
     if (!session?.access_token) return;
     const key = `${order.orgId}:${order.haravanOrderId}`;
     setConfirmingOrder(key);
-    setNotice("");
     try {
       const result = await confirmOrder(session.access_token, order, session.user.phone);
-      setNotice(
-        result.confirmed
-          ? `Đã gửi yêu cầu xác nhận đơn ${orderCode(order)}; đang chờ trạng thái cập nhật từ Haravan.`
-          : `Đơn ${orderCode(order)} chưa được xác nhận. Vui lòng kiểm tra trạng thái xử lý.`
-      );
+      if (result.confirmed) {
+        toast.success(
+          `Đã gửi yêu cầu xác nhận đơn ${orderCode(order)}; đang chờ trạng thái cập nhật từ Haravan.`
+        );
+      } else {
+        toast.warning(
+          `Đơn ${orderCode(order)} chưa được xác nhận. Vui lòng kiểm tra trạng thái xử lý.`
+        );
+      }
       await loadOrders();
       if (detail?.haravanOrderId === order.haravanOrderId && detail.orgId === order.orgId) {
         await showDetails(order);
       }
     } catch (confirmError) {
-      setNotice(confirmError instanceof Error ? confirmError.message : "Không thể xác nhận đơn hàng.");
+      toast.error(
+        confirmError instanceof Error
+          ? confirmError.message
+          : "Không thể xác nhận đơn hàng."
+      );
     } finally {
       setConfirmingOrder(null);
     }
@@ -282,16 +297,14 @@ export default function OrdersDashboard() {
     <main className="flex h-screen flex-col overflow-hidden bg-[#f5f6f2] text-[#20231f] dark:bg-[#151713] dark:text-[#f4f5ef]">
       <HaravanHeader />
       <div className="mx-auto flex w-full max-w-[1440px] flex-1 min-h-0 flex-col px-4 py-5 sm:px-6 lg:px-10">
-        <header className="mb-5 shrink-0">
+        <header className="mb-5 flex shrink-0 items-center justify-between gap-3">
+          <button type="button" onClick={() => setCreateOrderOpen(true)} className="order-last inline-flex h-11 shrink-0 items-center gap-2 rounded-xl bg-[#527b49] px-4 text-sm font-bold text-white transition hover:bg-[#41643a]">
+            <i className="pi pi-plus" aria-hidden="true" />
+            <span className="hidden sm:inline">Tạo đơn hàng</span>
+            <span className="sm:hidden">Tạo đơn</span>
+          </button>
           <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">Quản lý đơn hàng</h1>
         </header>
-
-        {notice && (
-          <div role="status" className="mb-4 flex shrink-0 items-start justify-between gap-4 rounded-xl border border-[#dce9dc] bg-[#f6fbf5] px-4 py-3 text-sm text-[#426a40] dark:border-[#354736] dark:bg-[#202820] dark:text-[#b4cfb3]">
-            <span>{notice}</span>
-            <button type="button" onClick={() => setNotice("")} aria-label="Đóng thông báo"><i className="pi pi-times" aria-hidden="true" /></button>
-          </div>
-        )}
 
         <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[#e8e9e2] bg-white shadow-[0_4px_24px_rgba(30,40,25,0.045)] dark:border-[#363b31] dark:bg-[#20231f]">
           <div className="flex shrink-0 flex-col justify-end gap-3 border-b border-[#eeefe9] px-5 py-4 dark:border-[#363b31] sm:flex-row sm:items-center sm:px-6">
@@ -389,6 +402,28 @@ export default function OrdersDashboard() {
           locale={locale}
           loading={detailLoading}
           onClose={() => setDetail(null)}
+        />
+      )}
+      {createOrderOpen && session.access_token && (
+        <CreateOrderDialog
+          token={session.access_token}
+          orgId={currentShop.orgId}
+          onClose={() => setCreateOrderOpen(false)}
+          onCreated={(createdOrder) => {
+            setCreateOrderOpen(false);
+            setPage(1);
+            setSearchInput("");
+            setSearchQuery("");
+            setConfirmationFilters([]);
+            setFinancialFilters([]);
+            setFulfillmentFilters([]);
+            setHaravanStatusFilters([]);
+            setCustomerOrderFilters([]);
+            setCreatedFrom("");
+            setCreatedTo("");
+            setOrders((current) => [createdOrder, ...current].slice(0, pageSize));
+            setTotal((current) => current + 1);
+          }}
         />
       )}
     </main>

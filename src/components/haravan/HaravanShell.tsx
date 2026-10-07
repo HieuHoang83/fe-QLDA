@@ -7,7 +7,7 @@ import { useEffect, type ReactNode } from "react";
 import HaravanHeader from "@/components/haravan/HaravanHeader";
 
 interface HaravanShellProps {
-  title: string;
+  title?: string;
   children: ReactNode;
   fill?: boolean;
 }
@@ -53,9 +53,11 @@ export default function HaravanShell({
           fill ? "flex min-h-0 flex-1 flex-col" : ""
         }`}
       >
-        <div className={`mb-5 ${fill ? "shrink-0" : ""}`}>
-          <h1 className="text-3xl font-extrabold tracking-tight">{title}</h1>
-        </div>
+        {title ? (
+          <div className={`mb-5 ${fill ? "shrink-0" : ""}`}>
+            <h1 className="text-3xl font-extrabold tracking-tight">{title}</h1>
+          </div>
+        ) : null}
         {fill ? (
           <div className="flex min-h-0 flex-1 flex-col">{children}</div>
         ) : (

@@ -33,13 +33,18 @@ export function productPrice(product: {
 }
 
 export function productStock(product: {
-  variants?: Array<{ inventory_quantity?: number; inventory_management?: string | null }>;
+  variants?: Array<{
+    inventory_quantity?: number;
+    inventory_management?: string | null;
+    inventory_advance?: { qty_available?: number };
+  }>;
 }): number | undefined {
   const variants = product.variants ?? [];
   if (!variants.length) return undefined;
   if (!variants.some((variant) => variant.inventory_management)) return undefined;
   return variants.reduce(
-    (sum, variant) => sum + (variant.inventory_quantity ?? 0),
+    (sum, variant) =>
+      sum + (variant.inventory_advance?.qty_available ?? variant.inventory_quantity ?? 0),
     0
   );
 }
@@ -54,6 +59,7 @@ export interface VariantLike {
   inventory_quantity?: number;
   inventory_management?: string | null;
   inventory_policy?: string | null;
+  inventory_advance?: { qty_available?: number };
 }
 
 /** Ghép option1..3 thành nhãn variant, fallback title. */
@@ -85,11 +91,13 @@ export function variantImage(
 export function isOutOfStock(variant: VariantLike): boolean {
   if (!variant.inventory_management) return false;
   if (variant.inventory_policy === "continue") return false;
-  return (variant.inventory_quantity ?? 0) <= 0;
+  return (
+    variant.inventory_advance?.qty_available ?? variant.inventory_quantity ?? 0
+  ) <= 0;
 }
 
 /** Số lượng còn bán được; undefined = không theo dõi tồn kho. */
 export function variantStock(variant: VariantLike): number | undefined {
   if (!variant.inventory_management) return undefined;
-  return variant.inventory_quantity ?? 0;
+  return variant.inventory_advance?.qty_available ?? variant.inventory_quantity ?? 0;
 }

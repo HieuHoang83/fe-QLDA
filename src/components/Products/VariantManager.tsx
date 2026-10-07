@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   createVariant,
@@ -8,9 +8,19 @@ import {
   updateVariant,
   type VariantPayload,
 } from "@/services/api/variants";
-import type {
-  HaravanProduct,
-  HaravanProductVariant,
+import {
+  adjustInventory,
+  listInventoryLocations,
+  listLocations,
+  locationAddress,
+  type HaravanLocation,
+  type InventoryAdjustPayload,
+} from "@/services/api/locations";
+import {
+  updateProduct,
+  type HaravanProduct,
+  type HaravanProductVariant,
+  type HaravanProductOption,
 } from "@/services/api/products";
 import {
   formatMoney,
@@ -20,6 +30,22 @@ import {
 } from "@/lib/haravan-format";
 
 const MAX_VARIANTS = 100;
+
+interface LocationChange {
+  location_id: number;
+  delta: number;
+}
+
+interface NewOption {
+  position: number;
+  name: string;
+}
+
+interface VariantSavePayload {
+  form: VariantFormState;
+  locationChanges: LocationChange[];
+  newOptions: NewOption[];
+}
 
 interface VariantFormState {
   sku: string;
@@ -36,6 +62,7 @@ interface VariantFormState {
   requires_shipping: boolean;
   taxable: boolean;
   image_id: string;
+  unit: string;
 }
 
 function emptyForm(): VariantFormState {
@@ -54,7 +81,12 @@ function emptyForm(): VariantFormState {
     requires_shipping: true,
     taxable: true,
     image_id: "",
+    unit: "",
   };
+}
+
+function baseUnit(variant?: HaravanProductVariant | null): string {
+  return variant?.variant_units?.find((item) => item.base)?.unit ?? "";
 }
 
 function fromVariant(variant: HaravanProductVariant): VariantFormState {
@@ -74,6 +106,7 @@ function fromVariant(variant: HaravanProductVariant): VariantFormState {
     requires_shipping: variant.requires_shipping ?? true,
     taxable: variant.taxable ?? true,
     image_id: variant.image_id == null ? "" : String(variant.image_id),
+    unit: baseUnit(variant),
   };
 }
 
@@ -87,12 +120,30 @@ function optionName(
   );
 }
 
-function toPayload(form: VariantFormState): VariantPayload {
+function toPayload(form: VariantFormState, hadUnits: boolean): VariantPayload {
   const toNumber = (value: string): number | undefined => {
     if (value.trim() === "") return undefined;
     const number = Number(value);
     return Number.isFinite(number) ? number : undefined;
   };
+  const unit = form.unit.trim();
+  const variant_units =
+    unit !== ""
+      ? [
+          {
+            id: 0,
+            unit,
+            base: true,
+            sellable: true,
+            ratio: 1,
+            price: toNumber(form.price),
+            sku: form.sku.trim() || undefined,
+            barcode: form.barcode.trim() || undefined,
+          },
+        ]
+      : hadUnits
+        ? []
+        : undefined;
   return {
     sku: form.sku.trim() || undefined,
     barcode: form.barcode.trim() || undefined,
@@ -108,6 +159,7 @@ function toPayload(form: VariantFormState): VariantPayload {
     requires_shipping: form.requires_shipping,
     taxable: form.taxable,
     image_id: form.image_id.trim() === "" ? null : Number(form.image_id),
+    variant_units,
   };
 }
 
@@ -117,23 +169,141 @@ const INPUT_CLASS =
 function VariantFormDialog({
   product,
   variant,
+  token,
+  orgId,
   saving,
   onClose,
   onSave,
 }: {
   product: HaravanProduct;
   variant: HaravanProductVariant | null;
+  token: string | undefined;
+  orgId: string;
   saving: boolean;
   onClose: () => void;
-  onSave: (form: VariantFormState) => void;
+  onSave: (payload: VariantSavePayload) => void;
 }) {
   const [form, setForm] = useState<VariantFormState>(() =>
     variant ? fromVariant(variant) : emptyForm()
   );
+  const [locations, setLocations] = useState<HaravanLocation[]>([]);
+  const [locationsReady, setLocationsReady] = useState(false);
+  const [locationSearch, setLocationSearch] = useState("");
+  const [locationQty, setLocationQty] = useState<Record<number, number>>({});
+  const [originalQty, setOriginalQty] = useState<Record<number, number>>({});
+
   const set = (field: keyof VariantFormState, value: string | boolean) =>
     setForm((prev) => ({ ...prev, [field]: value }));
 
+  useEffect(() => {
+    if (!token || !orgId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const result = await listLocations(token, orgId);
+        if (!cancelled) setLocations(result.locations ?? []);
+      } catch {
+        if (!cancelled) setLocations([]);
+      } finally {
+        if (!cancelled) setLocationsReady(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, orgId]);
+
+  useEffect(() => {
+    if (!token || !orgId || !locationsReady) return;
+    if (!variant?.id || locations.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const result = await listInventoryLocations(token, orgId, {
+          variant_ids: String(variant.id),
+          location_ids: locations.map((location) => location.id).join(","),
+        });
+        if (cancelled) return;
+        const map: Record<number, number> = {};
+        for (const item of result.inventory_locations ?? []) {
+          if (item.loc_id != null) map[item.loc_id] = item.qty_onhand ?? 0;
+        }
+        setOriginalQty(map);
+        setLocationQty(map);
+      } catch {
+        if (!cancelled) {
+          setOriginalQty({});
+          setLocationQty({});
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, orgId, locations, locationsReady, variant?.id]);
+
+  const hasLocationRows = locations.length > 0;
+  const locationTotal = hasLocationRows
+    ? locations.reduce(
+        (sum, location) => sum + (locationQty[location.id] ?? 0),
+        0
+      )
+    : undefined;
+
+  const locationChanges: LocationChange[] = hasLocationRows
+    ? locations
+        .map((location) => ({
+          location_id: location.id,
+          delta:
+            (locationQty[location.id] ?? 0) -
+            (originalQty[location.id] ?? 0),
+        }))
+        .filter((change) => change.delta !== 0)
+    : [];
+
+  const filteredLocations = locations.filter((location) => {
+    const keyword = locationSearch.trim().toLowerCase();
+    if (!keyword) return true;
+    return `${location.name ?? ""} ${locationAddress(location)}`
+      .toLowerCase()
+      .includes(keyword);
+  });
+
+  const takenPositions = new Set(
+    (product.options ?? []).map((option) => option.position ?? 0)
+  );
+  const optionSlots = [
+    ...(product.options ?? []).map((option, index) => ({
+      position: option.position ?? index + 1,
+      name: option.name || `Lựa chọn ${option.position ?? index + 1}`,
+      fixed: true,
+    })),
+  ].sort((a, b) => a.position - b.position);
+
   const price = Number(form.price);
+  const compare = Number(form.compare_at_price);
+  const tracking = form.inventory_management !== "";
+  const discount =
+    Number.isFinite(price) &&
+    Number.isFinite(compare) &&
+    compare > 0 &&
+    compare > price
+      ? Math.round(((compare - price) / compare) * 100)
+      : 0;
+  const previewImage = product.images?.find(
+    (image) => String(image.id) === form.image_id
+  )?.src;
+  const availableStock =
+    variant?.inventory_advance?.qty_available ??
+    (tracking ? Number(form.inventory_quantity) || 0 : undefined);
+  const titlePreview =
+    [form.option1, form.option2, form.option3]
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .join(" / ") ||
+    (variant?.title && variant.title !== "Default Title"
+      ? variant.title
+      : "Mặc định");
 
   return (
     <div
@@ -147,7 +317,7 @@ function VariantFormDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="variant-form-title"
-        className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-[#20231f]"
+        className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-[#20231f]"
       >
         <header className="flex shrink-0 items-start justify-between gap-4 border-b border-[#eef0ea] px-6 py-4 dark:border-[#363b31]">
           <div className="min-w-0">
@@ -171,71 +341,178 @@ function VariantFormDialog({
         <form
           onSubmit={(event) => {
             event.preventDefault();
-            onSave(form);
+            onSave({
+              form: {
+                ...form,
+                inventory_quantity:
+                  locationTotal != null
+                    ? String(locationTotal)
+                    : form.inventory_quantity,
+              },
+              locationChanges,
+              newOptions: [],
+            });
           }}
           className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5"
         >
-          {(product.options?.length ?? 0) > 0 && (
-            <fieldset className="rounded-2xl border border-[#e8e9e2] p-4 dark:border-[#363b31]">
-              <legend className="px-1 text-xs font-bold uppercase tracking-[0.12em] text-[#71836a]">
-                Lựa chọn (option)
-              </legend>
-              <div className="grid gap-4 sm:grid-cols-2">
-                {(product.options ?? []).slice(0, 3).map((option, index) => (
-                  <label key={option.id ?? option.position} className="block">
-                    <span className="mb-1.5 block text-sm font-semibold">
-                      {option.name || `Lựa chọn ${option.position ?? index + 1}`}
-                    </span>
-                    <input
-                      type="text"
-                      required
-                      value={form[`option${index + 1}` as "option1"]}
-                      onChange={(event) =>
-                        set(`option${index + 1}` as "option1", event.target.value)
-                      }
-                      placeholder={
-                        option.name || `option${index + 1}`
-                      }
-                      className={INPUT_CLASS}
-                    />
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-          )}
+          <fieldset className="rounded-2xl border border-[#e8e9e2] bg-[#fbfcf9] p-4 dark:border-[#363b31] dark:bg-[#1b1e1a]">
+            <legend className="flex items-center gap-2 px-1 text-xs font-bold uppercase tracking-[0.12em] text-[#71836a]">
+              <i className="pi pi-tag" aria-hidden="true" />
+              Thuộc tính
+            </legend>
+            <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_168px]">
+              <div className="space-y-4">
+                <div className="space-y-4">
+                  {optionSlots.map((slot) => (
+                    <div key={slot.position}>
+                      {slot.fixed ? (
+                        <label className="block">
+                          <span className="mb-1.5 block text-sm font-semibold">
+                            {slot.name}
+                          </span>
+                          <input
+                            type="text"
+                            required
+                            value={
+                              form[`option${slot.position}` as "option1"] ?? ""
+                            }
+                            onChange={(event) =>
+                              set(
+                                `option${slot.position}` as "option1",
+                                event.target.value
+                              )
+                            }
+                            placeholder={slot.name}
+                            className={INPUT_CLASS}
+                          />
+                        </label>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
 
-          <fieldset className="rounded-2xl border border-[#e8e9e2] p-4 dark:border-[#363b31]">
-            <legend className="px-1 text-xs font-bold uppercase tracking-[0.12em] text-[#71836a]">
-              Giá & Mã
+                <p className="text-xs text-[#858a80]">
+                  Thuộc tính biến thể được lấy từ thuộc tính sản phẩm.
+                </p>
+
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-semibold">Tiêu đề</span>
+                  <input
+                    type="text"
+                    readOnly
+                    value={titlePreview}
+                    className={`${INPUT_CLASS} cursor-not-allowed bg-[#f1f3ee] text-[#596052] dark:bg-[#252923] dark:text-[#d3d8ce]`}
+                  />
+                  <span className="mt-1 block text-xs text-[#858a80]">
+                    Tên hiển thị của biến thể, tự ghép từ các lựa chọn ở trên.
+                  </span>
+                </label>
+              </div>
+
+              <div>
+                <span className="mb-1.5 block text-sm font-semibold">Ảnh</span>
+                <div className="grid aspect-square place-items-center overflow-hidden rounded-xl border border-[#e5e7df] bg-white dark:border-[#40453b] dark:bg-[#191c18]">
+                  {previewImage ? (
+                    <img src={previewImage} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <i className="pi pi-image text-3xl text-[#b6bcb0]" aria-hidden="true" />
+                  )}
+                </div>
+                <select
+                  value={form.image_id}
+                  onChange={(event) => set("image_id", event.target.value)}
+                  aria-label="Chọn ảnh cho biến thể"
+                  className={`${INPUT_CLASS} mt-2 h-10`}
+                >
+                  <option value="">Ảnh mặc định</option>
+                  {(product.images ?? []).map((image) => (
+                    <option key={image.id} value={String(image.id)}>
+                      Ảnh #{image.id}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset className="rounded-2xl border border-[#e8e9e2] bg-[#fbfcf9] p-4 dark:border-[#363b31] dark:bg-[#1b1e1a]">
+            <legend className="flex items-center gap-2 px-1 text-xs font-bold uppercase tracking-[0.12em] text-[#71836a]">
+              <i className="pi pi-tags" aria-hidden="true" />
+              Chi tiết biến thể
             </legend>
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block">
-                <span className="mb-1.5 block text-sm font-semibold">Giá bán (₫)</span>
-                <input
-                  type="number"
-                  min={0}
-                  required
-                  value={form.price}
-                  onChange={(event) => set("price", event.target.value)}
-                  className={INPUT_CLASS}
-                />
+                <span className="mb-1.5 block text-sm font-semibold">Giá bán</span>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min={0}
+                    required
+                    value={form.price}
+                    onChange={(event) => set("price", event.target.value)}
+                    className={`${INPUT_CLASS} pr-9`}
+                  />
+                  <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-[#858a80]">
+                    ₫
+                  </span>
+                </div>
+                <span className="mt-1 block text-xs text-[#858a80]">
+                  Số tiền khách cần thanh toán.
+                </span>
               </label>
               <label className="block">
-                <span className="mb-1.5 block text-sm font-semibold">Giá gạch (₫)</span>
-                <input
-                  type="number"
-                  min={0}
-                  value={form.compare_at_price}
-                  onChange={(event) => set("compare_at_price", event.target.value)}
-                  className={INPUT_CLASS}
-                />
+                <span className="mb-1.5 block text-sm font-semibold">Giá so sánh</span>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min={0}
+                    value={form.compare_at_price}
+                    onChange={(event) => set("compare_at_price", event.target.value)}
+                    className={`${INPUT_CLASS} pr-9`}
+                  />
+                  <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-[#858a80]">
+                    ₫
+                  </span>
+                </div>
+                <span className="mt-1 block text-xs text-[#858a80]">
+                  Giá trước khi giảm — thể hiện mức giảm giá, ưu đãi cho khách.
+                </span>
               </label>
+            </div>
+
+            {discount > 0 && (
+              <p className="mt-3 inline-flex items-center gap-2 rounded-full bg-[#e8f4e9] px-3 py-1 text-xs font-bold text-[#26733c] dark:bg-[#30392c] dark:text-[#c4dfa9]">
+                <i className="pi pi-percentage" aria-hidden="true" />
+                Đang giảm {discount}% — khách trả {formatMoney(price)}
+              </p>
+            )}
+
+            <label className="mt-4 flex items-center gap-3 rounded-xl border border-[#e5e7df] bg-white px-4 py-3 dark:border-[#40453b] dark:bg-[#191c18]">
+              <input
+                type="checkbox"
+                checked={form.taxable}
+                onChange={(event) => set("taxable", event.target.checked)}
+                className="h-4 w-4 accent-[#527b49]"
+              />
+              <span className="text-sm font-semibold">Tính thuế cho biến thể này</span>
+            </label>
+          </fieldset>
+
+
+          <fieldset className="rounded-2xl border border-[#e8e9e2] bg-[#fbfcf9] p-4 dark:border-[#363b31] dark:bg-[#1b1e1a]">
+            <legend className="flex items-center gap-2 px-1 text-xs font-bold uppercase tracking-[0.12em] text-[#71836a]">
+              <i className="pi pi-box" aria-hidden="true" />
+              Quản lý tồn kho
+            </legend>
+
+            <div className="grid gap-4 sm:grid-cols-2">
               <label className="block">
                 <span className="mb-1.5 block text-sm font-semibold">SKU</span>
                 <input
                   type="text"
                   value={form.sku}
                   onChange={(event) => set("sku", event.target.value)}
+                  placeholder="Mã hàng nội bộ"
                   className={INPUT_CLASS}
                 />
               </label>
@@ -245,99 +522,290 @@ function VariantFormDialog({
                   type="text"
                   value={form.barcode}
                   onChange={(event) => set("barcode", event.target.value)}
+                  placeholder="Mã vạch"
                   className={INPUT_CLASS}
                 />
               </label>
             </div>
+
+            <label className="mt-4 flex items-start gap-3 rounded-xl border border-[#e5e7df] bg-white px-4 py-3 dark:border-[#40453b] dark:bg-[#191c18]">
+              <input
+                type="checkbox"
+                checked={tracking}
+                onChange={(event) =>
+                  set("inventory_management", event.target.checked ? "haravan" : "")
+                }
+                className="mt-0.5 h-4 w-4 accent-[#527b49]"
+              />
+              <span>
+                <span className="block text-sm font-semibold">Có quản lý tồn kho</span>
+                <span className="block text-xs text-[#858a80]">
+                  Bật để Haravan theo dõi số lượng và kho hàng của biến thể này.
+                </span>
+              </span>
+            </label>
+
+            {tracking ? (
+              <div className="mt-4 space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="rounded-xl border border-[#e5e7df] bg-white px-4 py-3 dark:border-[#40453b] dark:bg-[#191c18]">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#858a80]">
+                      Tồn kho khả dụng
+                    </p>
+                    <p className="mt-1 text-lg font-extrabold tabular-nums">
+                      {availableStock ?? 0}
+                    </p>
+                  </div>
+
+                  {hasLocationRows ? (
+                    <div className="rounded-xl border border-[#e5e7df] bg-white px-4 py-3 dark:border-[#40453b] dark:bg-[#191c18]">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#858a80]">
+                        Tồn đầu kỳ
+                      </p>
+                      <p className="mt-1 text-lg font-extrabold tabular-nums">
+                        {locationTotal ?? 0}
+                      </p>
+                    </div>
+                  ) : (
+                    <div>
+                      <span className="mb-1.5 block text-sm font-semibold">
+                        Tồn đầu kỳ
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          aria-label="Giảm tồn đầu kỳ"
+                          onClick={() =>
+                            set(
+                              "inventory_quantity",
+                              String(
+                                Math.max(
+                                  0,
+                                  (Number(form.inventory_quantity) || 0) - 1
+                                )
+                              )
+                            )
+                          }
+                          className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-[#e1e5dc] text-[#596052] hover:bg-[#f3f5ef] dark:border-[#40453b] dark:text-[#d3d8ce] dark:hover:bg-[#30342e]"
+                        >
+                          <i className="pi pi-minus" aria-hidden="true" />
+                        </button>
+                        <input
+                          type="number"
+                          min={0}
+                          value={form.inventory_quantity}
+                          onChange={(event) =>
+                            set("inventory_quantity", event.target.value)
+                          }
+                          className={`${INPUT_CLASS} w-28 text-center`}
+                        />
+                        <button
+                          type="button"
+                          aria-label="Tăng tồn đầu kỳ"
+                          onClick={() =>
+                            set(
+                              "inventory_quantity",
+                              String((Number(form.inventory_quantity) || 0) + 1)
+                            )
+                          }
+                          className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-[#e1e5dc] text-[#596052] hover:bg-[#f3f5ef] dark:border-[#40453b] dark:text-[#d3d8ce] dark:hover:bg-[#30342e]"
+                        >
+                          <i className="pi pi-plus" aria-hidden="true" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {hasLocationRows && (
+                  <div className="space-y-3">
+                    <label className="block">
+                      <span className="mb-1.5 block text-sm font-semibold">
+                        Tìm kho
+                      </span>
+                      <span className="relative block">
+                        <i
+                          className="pi pi-search absolute left-4 top-1/2 -translate-y-1/2 text-sm text-[#92988d]"
+                          aria-hidden="true"
+                        />
+                        <input
+                          type="search"
+                          value={locationSearch}
+                          onChange={(event) => setLocationSearch(event.target.value)}
+                          placeholder="Tìm theo tên kho hoặc địa chỉ..."
+                          className={`${INPUT_CLASS} pl-11`}
+                        />
+                      </span>
+                    </label>
+
+                    <div>
+                      <span className="mb-1.5 block text-sm font-semibold">
+                        Kho hàng
+                      </span>
+                      <div className="space-y-2">
+                        {filteredLocations.length === 0 && (
+                          <p className="rounded-xl border border-dashed border-[#d8ddd3] px-4 py-3 text-sm text-[#858a80] dark:border-[#40453b]">
+                            Không tìm thấy kho phù hợp.
+                          </p>
+                        )}
+                        {filteredLocations.map((location) => {
+                          const quantity = locationQty[location.id] ?? 0;
+                          const changeLocation = (value: number) =>
+                            setLocationQty((prev) => ({
+                              ...prev,
+                              [location.id]: Math.max(0, value),
+                            }));
+                          return (
+                            <div
+                              key={location.id}
+                              className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#e5e7df] bg-white px-4 py-3 dark:border-[#40453b] dark:bg-[#191c18]"
+                            >
+                              <div className="min-w-0">
+                                <p className="flex items-center gap-2 text-sm font-semibold">
+                                  <i
+                                    className="pi pi-home text-[#71836a]"
+                                    aria-hidden="true"
+                                  />
+                                  {location.name || `Kho #${location.id}`}
+                                  {location.is_primary && (
+                                    <span className="rounded-full bg-[#eef2ee] px-2 py-0.5 text-[11px] font-bold text-[#71836a] dark:bg-[#30392c] dark:text-[#c4dfa9]">
+                                      Mặc định
+                                    </span>
+                                  )}
+                                </p>
+                                <p className="mt-0.5 truncate text-xs text-[#858a80]">
+                                  {locationAddress(location) || "Chưa có địa chỉ"}
+                                </p>
+                              </div>
+                              <div className="flex shrink-0 items-center gap-1">
+                                <button
+                                  type="button"
+                                  aria-label={`Giảm tồn kho ${location.name ?? ""}`}
+                                  onClick={() => changeLocation(quantity - 1)}
+                                  className="grid h-9 w-9 place-items-center rounded-lg border border-[#e1e5dc] text-[#596052] hover:bg-[#f3f5ef] dark:border-[#40453b] dark:text-[#d3d8ce] dark:hover:bg-[#30342e]"
+                                >
+                                  <i className="pi pi-minus" aria-hidden="true" />
+                                </button>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  aria-label={`Tồn đầu kỳ tại ${location.name ?? ""}`}
+                                  value={quantity}
+                                  onChange={(event) =>
+                                    changeLocation(Number(event.target.value) || 0)
+                                  }
+                                  className="h-9 w-20 rounded-lg border border-[#e1e5dc] bg-[#fbfcf9] text-center text-sm font-semibold tabular-nums outline-none focus:border-[#7c9f70] dark:border-[#40453b] dark:bg-[#191c18]"
+                                />
+                                <button
+                                  type="button"
+                                  aria-label={`Tăng tồn kho ${location.name ?? ""}`}
+                                  onClick={() => changeLocation(quantity + 1)}
+                                  className="grid h-9 w-9 place-items-center rounded-lg border border-[#e1e5dc] text-[#596052] hover:bg-[#f3f5ef] dark:border-[#40453b] dark:text-[#d3d8ce] dark:hover:bg-[#30342e]"
+                                >
+                                  <i className="pi pi-plus" aria-hidden="true" />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <label className="flex items-start gap-3 rounded-xl border border-[#e5e7df] bg-white px-4 py-3 dark:border-[#40453b] dark:bg-[#191c18]">
+                  <input
+                    type="checkbox"
+                    checked={form.inventory_policy === "continue"}
+                    onChange={(event) =>
+                      set("inventory_policy", event.target.checked ? "continue" : "deny")
+                    }
+                    className="mt-0.5 h-4 w-4 accent-[#527b49]"
+                  />
+                  <span>
+                    <span className="block text-sm font-semibold">
+                      Cho phép đặt hàng khi hết hàng
+                    </span>
+                    <span className="block text-xs text-[#858a80]">
+                      Khách vẫn có thể mua khi tồn kho về 0.
+                    </span>
+                  </span>
+                </label>
+              </div>
+            ) : (
+              <p className="mt-4 rounded-xl border border-dashed border-[#d8ddd3] px-4 py-3 text-sm text-[#858a80] dark:border-[#40453b]">
+                Không theo dõi tồn kho — biến thể này luôn cho phép đặt hàng.
+              </p>
+            )}
           </fieldset>
 
-          <fieldset className="rounded-2xl border border-[#e8e9e2] p-4 dark:border-[#363b31]">
-            <legend className="px-1 text-xs font-bold uppercase tracking-[0.12em] text-[#71836a]">
-              Tồn kho & Vận chuyển
+
+          <fieldset className="rounded-2xl border border-[#e8e9e2] bg-[#fbfcf9] p-4 dark:border-[#363b31] dark:bg-[#1b1e1a]">
+            <legend className="flex items-center gap-2 px-1 text-xs font-bold uppercase tracking-[0.12em] text-[#71836a]">
+              <i className="pi pi-truck" aria-hidden="true" />
+              Vận chuyển
             </legend>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="block">
-                <span className="mb-1.5 block text-sm font-semibold">Theo dõi tồn kho</span>
-                <select
-                  value={form.inventory_management}
-                  onChange={(event) => set("inventory_management", event.target.value)}
-                  className={INPUT_CLASS}
-                >
-                  <option value="haravan">haravan — Haravan theo dõi</option>
-                  <option value="">blank — Không theo dõi</option>
-                </select>
+
+            <label className="flex items-start gap-3 rounded-xl border border-[#e5e7df] bg-white px-4 py-3 dark:border-[#40453b] dark:bg-[#191c18]">
+              <input
+                type="checkbox"
+                checked={form.requires_shipping}
+                onChange={(event) => set("requires_shipping", event.target.checked)}
+                className="mt-0.5 h-4 w-4 accent-[#527b49]"
+              />
+              <span>
+                <span className="block text-sm font-semibold">Cần giao hàng</span>
+                <span className="block text-xs text-[#858a80]">
+                  Chọn để cho phép giao hàng với sản phẩm này.
+                </span>
+              </span>
+            </label>
+
+            {form.requires_shipping && (
+              <label className="mt-4 block">
+                <span className="mb-1.5 block text-sm font-semibold">Khối lượng</span>
+                <div className="relative sm:w-56">
+                  <input
+                    type="number"
+                    min={0}
+                    value={form.grams}
+                    onChange={(event) => set("grams", event.target.value)}
+                    placeholder="0"
+                    className={`${INPUT_CLASS} pr-16`}
+                  />
+                  <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-[#858a80]">
+                    grams
+                  </span>
+                </div>
+                <span className="mt-1 block text-xs text-[#858a80]">
+                  Dùng cho tính phí vận chuyển.
+                </span>
               </label>
-              <label className="block">
-                <span className="mb-1.5 block text-sm font-semibold">Số lượng tồn</span>
-                <input
-                  type="number"
-                  min={0}
-                  value={form.inventory_quantity}
-                  onChange={(event) => set("inventory_quantity", event.target.value)}
-                  className={INPUT_CLASS}
-                />
-              </label>
-              <label className="block">
-                <span className="mb-1.5 block text-sm font-semibold">Chính sách khi hết hàng</span>
-                <select
-                  value={form.inventory_policy}
-                  onChange={(event) => set("inventory_policy", event.target.value)}
-                  className={INPUT_CLASS}
-                >
-                  <option value="continue">continue — Cho phép đặt tiếp</option>
-                  <option value="deny">deny — Từ chối đặt hàng</option>
-                </select>
-              </label>
-              <label className="block">
-                <span className="mb-1.5 block text-sm font-semibold">Cân nặng (gram)</span>
-                <input
-                  type="number"
-                  min={0}
-                  value={form.grams}
-                  onChange={(event) => set("grams", event.target.value)}
-                  className={INPUT_CLASS}
-                />
-              </label>
-              <label className="flex items-center gap-3 rounded-xl border border-[#e8e9e2] px-4 py-3 dark:border-[#363b31]">
-                <input
-                  type="checkbox"
-                  checked={form.requires_shipping}
-                  onChange={(event) => set("requires_shipping", event.target.checked)}
-                  className="h-4 w-4 accent-[#527b49]"
-                />
-                <span className="text-sm font-semibold">Cần giao hàng</span>
-              </label>
-              <label className="flex items-center gap-3 rounded-xl border border-[#e8e9e2] px-4 py-3 dark:border-[#363b31]">
-                <input
-                  type="checkbox"
-                  checked={form.taxable}
-                  onChange={(event) => set("taxable", event.target.checked)}
-                  className="h-4 w-4 accent-[#527b49]"
-                />
-                <span className="text-sm font-semibold">Tính thuế</span>
-              </label>
-            </div>
+            )}
           </fieldset>
 
-          {(product.images?.length ?? 0) > 0 && (
-            <fieldset className="rounded-2xl border border-[#e8e9e2] p-4 dark:border-[#363b31]">
-              <legend className="px-1 text-xs font-bold uppercase tracking-[0.12em] text-[#71836a]">
-                Ảnh
-              </legend>
-              <select
-                value={form.image_id}
-                onChange={(event) => set("image_id", event.target.value)}
+          <fieldset className="rounded-2xl border border-[#e8e9e2] bg-[#fbfcf9] p-4 dark:border-[#363b31] dark:bg-[#1b1e1a]">
+            <legend className="flex items-center gap-2 px-1 text-xs font-bold uppercase tracking-[0.12em] text-[#71836a]">
+              <i className="pi pi-inbox" aria-hidden="true" />
+              Đơn vị tính
+            </legend>
+            <p className="text-xs text-[#858a80]">
+              Biến thể có nhiều đơn vị tính (ví dụ: lon, lốc, thùng...).
+            </p>
+            <label className="mt-3 block sm:w-72">
+              <span className="mb-1.5 block text-sm font-semibold">Đơn vị cơ bản</span>
+              <input
+                type="text"
+                value={form.unit}
+                onChange={(event) => set("unit", event.target.value)}
+                placeholder="Nhập đơn vị cơ bản"
                 className={INPUT_CLASS}
-              >
-                <option value="">Không gắn ảnh riêng</option>
-                {(product.images ?? []).map((image) => (
-                  <option key={image.id} value={String(image.id)}>
-                    #{image.id} — {image.src ? image.src.split("/").pop() : "Ảnh"}
-                  </option>
-                ))}
-              </select>
-            </fieldset>
-          )}
+              />
+              <span className="mt-1 block text-xs text-[#858a80]">
+                Đơn vị nhỏ nhất dùng để tính tồn kho, ví dụ: cái, lon, hộp.
+              </span>
+            </label>
+          </fieldset>
         </form>
 
         <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-[#eef0ea] px-6 py-4 dark:border-[#363b31]">
@@ -399,7 +867,11 @@ export default function VariantManager({
     [variants, editing]
   );
 
-  async function handleSave(form: VariantFormState) {
+  async function handleSave({
+    form,
+    locationChanges,
+    newOptions,
+  }: VariantSavePayload) {
     if (!token || !product.id) return;
 
     if (!Number.isFinite(Number(form.price)) || Number(form.price) < 0) {
@@ -416,16 +888,63 @@ export default function VariantManager({
       return;
     }
 
-    const payload = toPayload(form);
+    const payload = toPayload(form, Boolean(editing?.variant_units?.length));
+    const isNew = !editing?.id;
     setSaving(true);
     try {
+      if (newOptions.length > 0) {
+        const merged: HaravanProductOption[] = [
+          ...(product.options ?? []),
+          ...newOptions
+            .filter((option) => option.name.trim())
+            .map((option) => ({
+              name: option.name.trim(),
+              position: option.position,
+              product_id: product.id,
+            })),
+        ].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+        await updateProduct(token, orgId, product.id, { options: merged });
+      }
+
+      let savedVariantId = editing?.id;
       if (editing?.id) {
         await updateVariant(token, orgId, editing.id, payload);
         toast.success("Đã cập nhật biến thể.");
       } else {
-        await createVariant(token, orgId, product.id, payload);
+        const created = await createVariant(token, orgId, product.id, payload);
+        savedVariantId = created.variant?.id;
         toast.success("Đã tạo biến thể mới.");
       }
+
+      if (savedVariantId && locationChanges.length > 0) {
+        const failed: number[] = [];
+        for (const change of locationChanges) {
+          const body: InventoryAdjustPayload = {
+            location_id: change.location_id,
+            type: isNew ? "set" : "adjust",
+            reason: isNew ? "newproduct" : "correction",
+            note: "Cập nhật từ trang quản lý sản phẩm",
+            line_items: [
+              {
+                product_id: product.id,
+                product_variant_id: savedVariantId,
+                quantity: change.delta,
+              },
+            ],
+          };
+          try {
+            await adjustInventory(token, orgId, body);
+          } catch {
+            failed.push(change.location_id);
+          }
+        }
+        if (failed.length > 0) {
+          toast.warning(
+            `Đã lưu biến thể nhưng chưa cập nhật được tồn kho ở ${failed.length} kho.`
+          );
+        }
+      }
+
       setEditing(null);
       setAdding(false);
       await onReload();
@@ -605,12 +1124,14 @@ export default function VariantManager({
         <VariantFormDialog
           product={product}
           variant={editing}
+          token={token}
+          orgId={orgId}
           saving={saving}
           onClose={() => {
             setAdding(false);
             setEditing(null);
           }}
-          onSave={(form) => void handleSave(form)}
+          onSave={(payload) => void handleSave(payload)}
         />
       )}
 
