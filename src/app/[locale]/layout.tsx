@@ -4,6 +4,7 @@ import ThemeProvider from "@/library/ThemeProvider";
 import NProgressWrapper from "@/library/nextprogressBar.wrapper";
 import ReactQueryProvider from "@/lib/providers/ReactQueryProvider";
 import { Toaster } from "@/components/ui/primitives/sonner";
+import { ShopProvider } from "@/context/ShopContext";
 import { NextIntlClientProvider } from "next-intl";
 import { getMessages } from "next-intl/server";
 import "./globals.css";
@@ -32,12 +33,14 @@ export default async function LocaleLayout({
           <NextIntlClientProvider messages={messages}>
             <NextAuthWrapper>
               <ReactQueryProvider>
-                <ThemeProvider>
-                  <Themefull>
-                    {children}
-                    <Toaster />
-                  </Themefull>
-                </ThemeProvider>
+                <ShopProvider>
+                  <ThemeProvider>
+                    <Themefull>
+                      {children}
+                      <Toaster />
+                    </Themefull>
+                  </ThemeProvider>
+                </ShopProvider>
               </ReactQueryProvider>
             </NextAuthWrapper>
           </NextIntlClientProvider>

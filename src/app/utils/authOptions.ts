@@ -1,6 +1,7 @@
 import type { AuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { login, refreshAccessToken } from "@/services/api/auth";
+import { TOKEN_REFRESH_WINDOW_MS } from "@/lib/token-refresh";
 
 function getTokenExpiry(accessToken: string): number {
   const payload = accessToken.split(".")[1];
@@ -67,7 +68,10 @@ export const authOptions: AuthOptions = {
         return token;
       }
 
-      if (token.accessTokenExpires && Date.now() < token.accessTokenExpires - 30_000) {
+      if (
+        token.accessTokenExpires &&
+        Date.now() < token.accessTokenExpires - TOKEN_REFRESH_WINDOW_MS
+      ) {
         return token;
       }
 
@@ -98,6 +102,7 @@ export const authOptions: AuthOptions = {
       }
       session.access_token = token.access_token;
       session.refresh_token = token.refresh_token;
+      session.accessTokenExpires = token.accessTokenExpires;
       session.user = token.user;
       session.error = token.error;
       return session;

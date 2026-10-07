@@ -14,6 +14,7 @@ import {
   OrderEvent,
   OrderRecord,
 } from "@/services/api/orders";
+import HaravanHeader from "@/components/haravan/HaravanHeader";
 import OrderDetailDialog from "./OrderDetailDialog";
 import OrdersTable from "./OrdersTable";
 import { ConfirmationStatus, orderCode } from "./orders.utils";
@@ -278,19 +279,11 @@ export default function OrdersDashboard() {
   }
 
   return (
-    <main className="h-screen overflow-hidden bg-[#f5f6f2] px-4 py-5 text-[#20231f] dark:bg-[#151713] dark:text-[#f4f5ef] sm:px-6 lg:px-10">
-      <div className="mx-auto flex h-full w-full max-w-[1440px] min-h-0 flex-col">
-        <header className="mb-5 flex shrink-0 flex-col justify-between gap-4 sm:flex-row sm:items-end">
-          <div>
-            <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">Quản lý đơn hàng</h1>
-            <p className="mt-2 text-sm text-[#73796f] dark:text-[#b3b9ad]">Xin chào {session.user.name}. Tìm kiếm, xem chi tiết và xử lý đơn từ hệ thống.</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="hidden text-sm text-[#73796f] dark:text-[#b3b9ad] sm:inline">{session.user.phone}</span>
-            <button type="button" onClick={() => void signOut({ redirect: false })} className="inline-flex h-10 items-center gap-2 rounded-xl border border-[#e1e5dc] bg-white px-4 text-sm font-semibold text-[#596052] transition hover:bg-[#f3f5ef] dark:border-[#40453b] dark:bg-[#20231f] dark:text-[#d3d8ce] dark:hover:bg-[#30342e]">
-              <i className="pi pi-sign-out" aria-hidden="true" /> Đăng xuất
-            </button>
-          </div>
+    <main className="flex h-screen flex-col overflow-hidden bg-[#f5f6f2] text-[#20231f] dark:bg-[#151713] dark:text-[#f4f5ef]">
+      <HaravanHeader />
+      <div className="mx-auto flex w-full max-w-[1440px] flex-1 min-h-0 flex-col px-4 py-5 sm:px-6 lg:px-10">
+        <header className="mb-5 shrink-0">
+          <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">Quản lý đơn hàng</h1>
         </header>
 
         {notice && (

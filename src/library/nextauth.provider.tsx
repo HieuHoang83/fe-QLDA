@@ -1,5 +1,7 @@
 "use client";
 import { SessionProvider } from "next-auth/react";
+import TokenRefresh from "@/library/TokenRefresh";
+import { TOKEN_REFRESH_WINDOW_MS } from "@/lib/token-refresh";
 
 export default function NextAuthWrapper({
   children,
@@ -8,9 +10,10 @@ export default function NextAuthWrapper({
 }) {
   return (
     <SessionProvider
-      refetchInterval={5 * 60}
+      refetchInterval={TOKEN_REFRESH_WINDOW_MS / 1000}
       refetchOnWindowFocus={false}
     >
+      <TokenRefresh />
       {children}
     </SessionProvider>
   );
