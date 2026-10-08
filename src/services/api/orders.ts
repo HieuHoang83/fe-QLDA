@@ -215,7 +215,7 @@ async function request<T>(
   path: string,
   token: string,
   options: {
-    method?: "GET" | "POST";
+    method?: "GET" | "POST" | "PUT";
     params?: Record<string, string | number>;
     body?: object;
   } = {}
@@ -314,6 +314,185 @@ export function createOrder(
   body: CreateOrderInput
 ): Promise<OrderRecord> {
   return request<OrderRecord>(`/${encodeURIComponent(orgId)}/create`, token, {
+    method: "POST",
+    body,
+  });
+}
+
+/** Trang thai vong doi hien tai, uu tien payload webhook moi nhat. */
+export function haravanStatusOf(order: OrderRecord): HaravanOrderStatus {
+  const fromPayload = order.payload?.status;
+  if (fromPayload === "closed" || fromPayload === "cancelled") return fromPayload;
+  if (order.haravanStatus === "closed" || order.haravanStatus === "cancelled") {
+    return order.haravanStatus;
+  }
+  if (order.payload?.cancelled_status === "cancelled") return "cancelled";
+  if (order.payload?.closed_status === "closed") return "closed";
+  return "open";
+}
+
+function toNumber(value: unknown): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+/** So tien da thu, da hoan va con lai co the hoan cua don. */
+export function refundableAmount(order: OrderRecord): {
+  paid: number;
+  refunded: number;
+  remaining: number;
+} {
+  const paid = toNumber(order.payload?.total_paid ?? order.totalPrice);
+  const refunded = toNumber(order.payload?.total_refunded);
+  return { paid, refunded, remaining: Math.max(0, paid - refunded) };
+}
+
+export interface CancelOrderInput {
+  reason?: string;
+  refund?: boolean;
+  restock?: boolean;
+  amount?: number;
+  note?: string;
+  actor?: string;
+}
+
+export interface RefundOrderInput {
+  amount?: number;
+  note?: string;
+  gateway?: string;
+  actor?: string;
+}
+
+export interface UpdateOrderInput {
+  note?: string;
+  note_attributes?: Array<{ name: string; value: string }>;
+  email?: string;
+  phone?: string;
+  actor?: string;
+}
+
+export interface Transaction {
+  id?: number;
+  order_id?: number;
+  amount?: number;
+  authorization?: string | null;
+  created_at?: string;
+  gateway?: string;
+  kind?: "pending" | "authorization" | "sale" | "capture" | "void" | "refund";
+  status?: "success" | "failure" | "pending" | "error";
+  currency?: string;
+  test?: boolean;
+  receipt?: unknown;
+}
+
+function orderKey(order: Pick<OrderRecord, "orgId" | "haravanOrderId">): string {
+  return `/${encodeURIComponent(order.orgId)}/${encodeURIComponent(
+    order.haravanOrderId
+  )}`;
+}
+
+export function cancelOrder(
+  token: string,
+  order: Pick<OrderRecord, "orgId" | "haravanOrderId">,
+  input: CancelOrderInput = {}
+): Promise<{ cancelled: boolean; order: OrderRecord }> {
+  return request(`${orderKey(order)}/cancel`, token, {
+    method: "POST",
+    body: input,
+  });
+}
+
+export function closeOrder(
+  token: string,
+  order: Pick<OrderRecord, "orgId" | "haravanOrderId">,
+  actor?: string
+): Promise<{ closed: boolean; order: OrderRecord }> {
+  return request(`${orderKey(order)}/close`, token, {
+    method: "POST",
+    body: { actor },
+  });
+}
+
+export function openOrder(
+  token: string,
+  order: Pick<OrderRecord, "orgId" | "haravanOrderId">,
+  actor?: string
+): Promise<{ opened: boolean; order: OrderRecord }> {
+  return request(`${orderKey(order)}/open`, token, {
+    method: "POST",
+    body: { actor },
+  });
+}
+
+export function updateOrder(
+  token: string,
+  order: Pick<OrderRecord, "orgId" | "haravanOrderId">,
+  input: UpdateOrderInput
+): Promise<{ updated: boolean; order: OrderRecord }> {
+  return request(orderKey(order), token, {
+    method: "PUT",
+    body: input,
+  });
+}
+
+export function refundOrder(
+  token: string,
+  order: Pick<OrderRecord, "orgId" | "haravanOrderId">,
+  input: RefundOrderInput
+): Promise<{ refunded: boolean; order: OrderRecord }> {
+  const { actor, ...rest } = input;
+  return request(`${orderKey(order)}/refunds`, token, {
+    method: "POST",
+    body: {
+      ...rest,
+      ...(rest.amount
+        ? {
+            transactions: [
+              {
+                kind: "refund",
+                amount: rest.amount,
+                ...(rest.gateway ? { gateway: rest.gateway } : {}),
+                ...(rest.note ? { note: rest.note } : {}),
+              },
+            ],
+          }
+        : {}),
+    },
+  });
+}
+
+export function listRefunds(
+  token: string,
+  order: Pick<OrderRecord, "orgId" | "haravanOrderId">,
+  params: { page?: number; limit?: number } = {}
+): Promise<unknown> {
+  return request(`${orderKey(order)}/refunds`, token, { params });
+}
+
+export function getRefund(
+  token: string,
+  order: Pick<OrderRecord, "orgId" | "haravanOrderId">,
+  refundId: number
+): Promise<unknown> {
+  return request(
+    `${orderKey(order)}/refunds/${encodeURIComponent(refundId)}`,
+    token
+  );
+}
+
+export function listTransactions(
+  token: string,
+  order: Pick<OrderRecord, "orgId" | "haravanOrderId">
+): Promise<{ transactions: Transaction[] }> {
+  return request(`${orderKey(order)}/transactions`, token);
+}
+
+export function createTransaction(
+  token: string,
+  order: Pick<OrderRecord, "orgId" | "haravanOrderId">,
+  body: { amount: number; kind: string; gateway?: string; parent_id?: number; note?: string }
+): Promise<{ transaction: Transaction; success: boolean }> {
+  return request(`${orderKey(order)}/transactions`, token, {
     method: "POST",
     body,
   });

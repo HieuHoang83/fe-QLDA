@@ -3,21 +3,19 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { signIn, signOut, useSession } from "next-auth/react";
 import { useLocale } from "next-intl";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useShop } from "@/context/ShopContext";
 import {
   confirmOrder,
   CustomerOrderType,
-  getOrderDetails,
   getOrders,
   FinancialStatusValue,
   FulfillmentStatusValue,
   HaravanOrderStatus,
-  OrderEvent,
   OrderRecord,
 } from "@/services/api/orders";
-import HaravanHeader from "@/components/haravan/HaravanHeader";
-import OrderDetailDialog from "./OrderDetailDialog";
+import HaravanShell from "@/components/haravan/HaravanShell";
 import CreateOrderDialog from "./CreateOrderDialog";
 import OrdersTable from "./OrdersTable";
 import { ConfirmationStatus, orderCode } from "./orders.utils";
@@ -88,6 +86,7 @@ function LoginForm() {
 export default function OrdersDashboard() {
   const { data: session, status: sessionStatus } = useSession();
   const locale = useLocale();
+  const router = useRouter();
   const { currentShop } = useShop();
   const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [total, setTotal] = useState(0);
@@ -104,9 +103,6 @@ export default function OrdersDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [detail, setDetail] = useState<OrderRecord | null>(null);
-  const [events, setEvents] = useState<OrderEvent[]>([]);
-  const [detailLoading, setDetailLoading] = useState(false);
   const [confirmingOrder, setConfirmingOrder] = useState<string | null>(null);
   const [createOrderOpen, setCreateOrderOpen] = useState(false);
 
@@ -149,27 +145,9 @@ export default function OrdersDashboard() {
     [page, pageCount]
   );
 
-  async function showDetails(order: OrderRecord) {
-    if (!session?.access_token) return;
-    setDetail(order);
-    setDetailLoading(true);
-    setEvents([]);
-    try {
-      const result = await getOrderDetails(session.access_token, order);
-      setDetail({
-        ...result.order,
-        customerOrderNumber: order.customerOrderNumber ?? result.order.customer?.ordersCount,
-      });
-      setEvents(result.events);
-    } catch (detailError) {
-      toast.error(
-        detailError instanceof Error
-          ? detailError.message
-          : "Không tải được chi tiết đơn hàng."
-      );
-    } finally {
-      setDetailLoading(false);
-    }
+  /** Chi tiết don la mot trang rieng: /orders/[haravanOrderId]. */
+  function showDetails(order: OrderRecord) {
+    router.push(`/${locale}/orders/${order.haravanOrderId}`);
   }
 
   async function handleConfirm(order: OrderRecord) {
@@ -188,9 +166,6 @@ export default function OrdersDashboard() {
         );
       }
       await loadOrders();
-      if (detail?.haravanOrderId === order.haravanOrderId && detail.orgId === order.orgId) {
-        await showDetails(order);
-      }
     } catch (confirmError) {
       toast.error(
         confirmError instanceof Error
@@ -201,6 +176,7 @@ export default function OrdersDashboard() {
       setConfirmingOrder(null);
     }
   }
+
 
   function searchOrders(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -294,21 +270,9 @@ export default function OrdersDashboard() {
   }
 
   return (
-    <main className="flex h-screen flex-col overflow-hidden bg-[#f5f6f2] text-[#20231f] dark:bg-[#151713] dark:text-[#f4f5ef]">
-      <HaravanHeader />
-      <div className="mx-auto flex w-full max-w-[1440px] flex-1 min-h-0 flex-col px-4 py-5 sm:px-6 lg:px-10">
-        <header className="mb-5 flex shrink-0 items-center justify-between gap-3">
-          <button type="button" onClick={() => setCreateOrderOpen(true)} className="order-last inline-flex h-11 shrink-0 items-center gap-2 rounded-xl bg-[#527b49] px-4 text-sm font-bold text-white transition hover:bg-[#41643a]">
-            <i className="pi pi-plus" aria-hidden="true" />
-            <span className="hidden sm:inline">Tạo đơn hàng</span>
-            <span className="sm:hidden">Tạo đơn</span>
-          </button>
-          <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">Quản lý đơn hàng</h1>
-        </header>
-
+    <HaravanShell fill>
         <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[#e8e9e2] bg-white shadow-[0_4px_24px_rgba(30,40,25,0.045)] dark:border-[#363b31] dark:bg-[#20231f]">
-          <div className="flex shrink-0 flex-col justify-end gap-3 border-b border-[#eeefe9] px-5 py-4 dark:border-[#363b31] sm:flex-row sm:items-center sm:px-6">
-            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+          <div className="flex shrink-0 flex-col justify-start gap-3 border-b border-[#eeefe9] px-5 py-4 dark:border-[#363b31] sm:flex-row sm:items-center sm:justify-between sm:px-6">
               <form onSubmit={searchOrders} className="flex w-full gap-2 sm:w-[min(500px,45vw)]">
                 <label className="relative min-w-0 flex-1">
                   <span className="sr-only">Tìm đơn hàng hoặc khách hàng</span>
@@ -320,6 +284,7 @@ export default function OrdersDashboard() {
                   <i className={`pi pi-refresh ${loading ? "pi-spin" : ""}`} aria-hidden="true" />
                 </button>
               </form>
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
               <button
                 type="button"
                 onClick={clearAllFilters}
@@ -328,6 +293,11 @@ export default function OrdersDashboard() {
               >
                 <i className="pi pi-filter-slash" aria-hidden="true" />
                 Xóa tất cả bộ lọc
+              </button>
+              <button type="button" onClick={() => setCreateOrderOpen(true)} className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-[#527b49] px-4 text-sm font-bold text-white transition hover:bg-[#41643a]">
+                <i className="pi pi-plus" aria-hidden="true" />
+                <span className="hidden sm:inline">Tạo đơn hàng</span>
+                <span className="sm:hidden">Tạo đơn</span>
               </button>
             </div>
           </div>
@@ -393,17 +363,6 @@ export default function OrdersDashboard() {
             </nav>
           </footer>
         </section>
-      </div>
-
-      {detail && (
-        <OrderDetailDialog
-          order={detail}
-          events={events}
-          locale={locale}
-          loading={detailLoading}
-          onClose={() => setDetail(null)}
-        />
-      )}
       {createOrderOpen && session.access_token && (
         <CreateOrderDialog
           token={session.access_token}
@@ -426,6 +385,6 @@ export default function OrdersDashboard() {
           }}
         />
       )}
-    </main>
+    </HaravanShell>
   );
 }

@@ -14,9 +14,24 @@ export interface HaravanLocation {
   country?: string | null;
   phone?: string | null;
   is_primary?: boolean;
+  is_unavailable_quantity?: boolean;
   type?: string | null;
+  status?: string | null;
   created_at?: string;
   updated_at?: string;
+}
+
+/** Haravan's on-the-road location is a virtual aggregate, not a selectable warehouse. */
+export function isVirtualLocation(location: HaravanLocation): boolean {
+  const locationType = `${location.location_type ?? ""} ${location.type ?? ""}`
+    .trim()
+    .toLowerCase();
+  return locationType.split(/\s+/).includes("ontheroad");
+}
+
+/** Locations marked unavailable by Haravan must not be used for receiving stock. */
+export function isUnavailableLocation(location: HaravanLocation): boolean {
+  return location.is_unavailable_quantity === true;
 }
 
 export interface HaravanLocationListResult {
@@ -43,6 +58,9 @@ export interface InventoryLineItem {
   product_id: number;
   product_variant_id: number;
   quantity: number;
+  cost_amount?: number;
+  sku?: string;
+  barcode?: string;
 }
 
 export interface InventoryAdjustPayload {
@@ -50,6 +68,8 @@ export interface InventoryAdjustPayload {
   type: "adjust" | "set";
   reason?: string;
   note?: string;
+  tran_date?: string;
+  tags?: string;
   line_items: InventoryLineItem[];
 }
 

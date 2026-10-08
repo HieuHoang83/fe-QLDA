@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useShop } from "@/context/ShopContext";
 
-export default function ShopSelector() {
+export default function ShopSelector({ compact = false, label }: { compact?: boolean; label?: string }) {
   const { shops, currentShop, setCurrentShop, addShop } = useShop();
   const [open, setOpen] = useState(false);
   const [orgId, setOrgId] = useState("");
@@ -45,11 +45,12 @@ export default function ShopSelector() {
         type="button"
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
-        className="inline-flex h-10 items-center gap-2 rounded-xl border border-[#e1e5dc] bg-white px-3 text-sm font-semibold text-[#3f463b] transition hover:bg-[#f3f5ef] dark:border-[#40453b] dark:bg-[#20231f] dark:text-[#e3e7dd] dark:hover:bg-[#30342e]"
+        aria-label="Cấu hình shop"
+        className={`inline-flex h-10 items-center gap-2 rounded-xl border border-[#e1e5dc] bg-white px-3 text-sm font-semibold text-[#3f463b] transition hover:bg-[#f3f5ef] dark:border-[#40453b] dark:bg-[#20231f] dark:text-[#e3e7dd] dark:hover:bg-[#30342e] ${compact ? "w-10 justify-center px-0" : ""}`}
+        title="Cấu hình shop"
       >
         <i className="pi pi-shop text-sm text-[#71836a]" aria-hidden="true" />
-        <span className="max-w-[180px] truncate">{currentShop.name}</span>
-        <i className="pi pi-chevron-down text-xs" aria-hidden="true" />
+        {!compact && <><span className="max-w-[180px] truncate">{label || currentShop.name}</span><i className="pi pi-chevron-down text-xs" aria-hidden="true" /></>}
       </button>
 
       {open && (

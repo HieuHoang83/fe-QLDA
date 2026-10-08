@@ -1,6 +1,12 @@
 "use client";
 
-import { CustomerAddress, OrderEvent, OrderRecord } from "@/services/api/orders";
+import {
+  CancelOrderInput,
+  CustomerAddress,
+  OrderEvent,
+  OrderRecord,
+} from "@/services/api/orders";
+import OrderActions, { OrderRefundInput } from "./OrderActions";
 import {
   displayName,
   fulfillmentStatusText,
@@ -16,6 +22,11 @@ interface OrderDetailDialogProps {
   locale: string;
   loading: boolean;
   onClose: () => void;
+  actionPending?: string | null;
+  onCancelOrder?: (input: CancelOrderInput) => Promise<void>;
+  onRefundOrder?: (input: OrderRefundInput) => Promise<void>;
+  onCloseOrder?: () => Promise<void>;
+  onOpenOrder?: () => Promise<void>;
 }
 
 function displayValue(value: unknown): string {
@@ -58,6 +69,10 @@ function eventActionLabel(action: string) {
     order_confirmed: "Xác nhận đơn",
     order_confirm_requested: "Gửi yêu cầu xác nhận",
     order_confirm_failed: "Xác nhận không thành công",
+    order_cancelled: "Đã hủy đơn",
+    order_closed: "Đã đóng đơn",
+    order_opened: "Mở lại đơn",
+    order_refunded: "Hoàn tiền",
   };
   return labels[action] || action.replaceAll("_", " ");
 }
@@ -114,6 +129,11 @@ export default function OrderDetailDialog({
   locale,
   loading,
   onClose,
+  actionPending = null,
+  onCancelOrder,
+  onRefundOrder,
+  onCloseOrder,
+  onOpenOrder,
 }: OrderDetailDialogProps) {
   const itemCount = order.itemCount
     ?? order.lineItems?.reduce((sum, item) => sum + (item.quantity ?? 0), 0)
@@ -403,6 +423,17 @@ export default function OrderDetailDialog({
                 </tbody>
               </table>
             </div>
+            {onCancelOrder && onRefundOrder && onCloseOrder && onOpenOrder && (
+              <OrderActions
+                order={order}
+                locale={locale}
+                pending={actionPending}
+                onCancel={onCancelOrder}
+                onRefund={onRefundOrder}
+                onCloseOrder={onCloseOrder}
+                onOpenOrder={onOpenOrder}
+              />
+            )}
           </>
         )}
         </div>

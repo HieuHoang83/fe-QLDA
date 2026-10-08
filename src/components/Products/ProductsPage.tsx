@@ -72,8 +72,12 @@ export function ProductEditDialog({
             <p className="text-xs font-bold uppercase tracking-[0.15em] text-[#71836a]">
               {product.id ? "Cập nhật sản phẩm" : "Thêm sản phẩm"}
             </p>
-            <h2 id="product-edit-title" className="mt-1 truncate text-xl font-extrabold">
-              {product.title || (product.id ? `Sản phẩm #${product.id}` : "Sản phẩm mới")}
+            <h2
+              id="product-edit-title"
+              className="mt-1 truncate text-xl font-extrabold"
+            >
+              {product.title ||
+                (product.id ? `Sản phẩm #${product.id}` : "Sản phẩm mới")}
             </h2>
           </div>
           <button
@@ -94,7 +98,9 @@ export function ProductEditDialog({
           className="space-y-4 px-6 py-5"
         >
           <label className="block">
-            <span className="mb-1.5 block text-sm font-semibold">Tên sản phẩm</span>
+            <span className="mb-1.5 block text-sm font-semibold">
+              Tên sản phẩm
+            </span>
             <input
               type="text"
               required
@@ -107,7 +113,9 @@ export function ProductEditDialog({
           </label>
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block">
-              <span className="mb-1.5 block text-sm font-semibold">Nhà cung cấp</span>
+              <span className="mb-1.5 block text-sm font-semibold">
+                Nhà cung cấp
+              </span>
               <input
                 type="text"
                 value={form.vendor}
@@ -118,12 +126,17 @@ export function ProductEditDialog({
               />
             </label>
             <label className="block">
-              <span className="mb-1.5 block text-sm font-semibold">Loại sản phẩm</span>
+              <span className="mb-1.5 block text-sm font-semibold">
+                Loại sản phẩm
+              </span>
               <input
                 type="text"
                 value={form.product_type}
                 onChange={(event) =>
-                  setForm((prev) => ({ ...prev, product_type: event.target.value }))
+                  setForm((prev) => ({
+                    ...prev,
+                    product_type: event.target.value,
+                  }))
                 }
                 className="h-11 w-full rounded-xl border border-[#e1e5dc] bg-[#fbfcf9] px-4 text-sm outline-none focus:border-[#7c9f70] dark:border-[#40453b] dark:bg-[#191c18]"
               />
@@ -155,7 +168,9 @@ export function ProductEditDialog({
               disabled={saving}
               className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#527b49] px-5 text-sm font-bold text-white hover:bg-[#41643a] disabled:cursor-wait disabled:opacity-60"
             >
-              {saving && <i className="pi pi-spin pi-spinner" aria-hidden="true" />}
+              {saving && (
+                <i className="pi pi-spin pi-spinner" aria-hidden="true" />
+              )}
               {product.id ? "Lưu thay đổi" : "Tạo sản phẩm"}
             </button>
           </div>
@@ -204,7 +219,7 @@ export default function ProductsPage() {
       setError(
         loadError instanceof Error
           ? loadError.message
-          : "Không tải được danh sách sản phẩm."
+          : "Không tải được danh sách sản phẩm.",
       );
     } finally {
       setLoading(false);
@@ -228,7 +243,7 @@ export default function ProductsPage() {
         ...(product.variants ?? []).map((variant) => variant.sku),
       ]
         .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(keyword))
+        .some((value) => String(value).toLowerCase().includes(keyword)),
     );
   }, [products, search]);
 
@@ -245,8 +260,8 @@ export default function ProductsPage() {
         });
         setProducts((prev) =>
           prev.map((product) =>
-            product.id === result.product.id ? result.product : product
-          )
+            product.id === result.product.id ? result.product : product,
+          ),
         );
         setEditing(null);
         toast.success(`Đã cập nhật sản phẩm "${result.product.title}".`);
@@ -270,7 +285,7 @@ export default function ProductsPage() {
           ? saveError.message
           : editing?.id
             ? "Không cập nhật được sản phẩm."
-            : "Không tạo được sản phẩm."
+            : "Không tạo được sản phẩm.",
       );
     } finally {
       setSaving(false);
@@ -370,7 +385,9 @@ export default function ProductsPage() {
       cell: (product) => {
         const stock = productStock(product);
         return (
-          <span className="tabular-nums">{stock === undefined ? "—" : stock}</span>
+          <span className="tabular-nums">
+            {stock === undefined ? "—" : stock}
+          </span>
         );
       },
     },
@@ -406,10 +423,7 @@ export default function ProductsPage() {
   ];
 
   return (
-    <HaravanShell
-      fill
-      title="Quản lý sản phẩm"
-    >
+    <HaravanShell fill>
       <DataTable
         columns={columns}
         rows={filtered}

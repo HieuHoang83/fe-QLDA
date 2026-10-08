@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useLocale } from "next-intl";
 import { toast } from "sonner";
 import {
   createVariant,
@@ -9,12 +11,11 @@ import {
   type VariantPayload,
 } from "@/services/api/variants";
 import {
-  adjustInventory,
   listInventoryLocations,
   listLocations,
   locationAddress,
+  isVirtualLocation,
   type HaravanLocation,
-  type InventoryAdjustPayload,
 } from "@/services/api/locations";
 import {
   updateProduct,
@@ -31,11 +32,6 @@ import {
 
 const MAX_VARIANTS = 100;
 
-interface LocationChange {
-  location_id: number;
-  delta: number;
-}
-
 interface NewOption {
   position: number;
   name: string;
@@ -43,7 +39,6 @@ interface NewOption {
 
 interface VariantSavePayload {
   form: VariantFormState;
-  locationChanges: LocationChange[];
   newOptions: NewOption[];
 }
 
@@ -56,7 +51,6 @@ interface VariantFormState {
   compare_at_price: string;
   barcode: string;
   grams: string;
-  inventory_quantity: string;
   inventory_management: string;
   inventory_policy: string;
   requires_shipping: boolean;
@@ -75,7 +69,6 @@ function emptyForm(): VariantFormState {
     compare_at_price: "",
     barcode: "",
     grams: "",
-    inventory_quantity: "0",
     inventory_management: "haravan",
     inventory_policy: "continue",
     requires_shipping: true,
@@ -100,7 +93,6 @@ function fromVariant(variant: HaravanProductVariant): VariantFormState {
       variant.compare_at_price == null ? "" : String(variant.compare_at_price),
     barcode: variant.barcode ?? "",
     grams: variant.grams == null ? "" : String(variant.grams),
-    inventory_quantity: String(variant.inventory_quantity ?? 0),
     inventory_management: variant.inventory_management ?? "haravan",
     inventory_policy: variant.inventory_policy ?? "continue",
     requires_shipping: variant.requires_shipping ?? true,
@@ -153,7 +145,6 @@ function toPayload(form: VariantFormState, hadUnits: boolean): VariantPayload {
     price: toNumber(form.price),
     compare_at_price: toNumber(form.compare_at_price),
     grams: toNumber(form.grams),
-    inventory_quantity: toNumber(form.inventory_quantity),
     inventory_management: form.inventory_management,
     inventory_policy: form.inventory_policy,
     requires_shipping: form.requires_shipping,
@@ -183,14 +174,14 @@ function VariantFormDialog({
   onClose: () => void;
   onSave: (payload: VariantSavePayload) => void;
 }) {
+  const locale = useLocale();
   const [form, setForm] = useState<VariantFormState>(() =>
     variant ? fromVariant(variant) : emptyForm()
   );
   const [locations, setLocations] = useState<HaravanLocation[]>([]);
   const [locationsReady, setLocationsReady] = useState(false);
-  const [locationSearch, setLocationSearch] = useState("");
   const [locationQty, setLocationQty] = useState<Record<number, number>>({});
-  const [originalQty, setOriginalQty] = useState<Record<number, number>>({});
+  const [variantLocationIds, setVariantLocationIds] = useState<number[]>([]);
 
   const set = (field: keyof VariantFormState, value: string | boolean) =>
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -215,24 +206,46 @@ function VariantFormDialog({
 
   useEffect(() => {
     if (!token || !orgId || !locationsReady) return;
-    if (!variant?.id || locations.length === 0) return;
+    if (!variant?.id) {
+      setVariantLocationIds([]);
+      return;
+    }
+    if (locations.length === 0) {
+      setVariantLocationIds([]);
+      setLocationQty({});
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
         const result = await listInventoryLocations(token, orgId, {
           variant_ids: String(variant.id),
-          location_ids: locations.map((location) => location.id).join(","),
+          location_ids: locations
+            .filter((location) => !isVirtualLocation(location))
+            .map((location) => location.id)
+            .join(","),
         });
         if (cancelled) return;
         const map: Record<number, number> = {};
         for (const item of result.inventory_locations ?? []) {
-          if (item.loc_id != null) map[item.loc_id] = item.qty_onhand ?? 0;
+          if (
+            item.loc_id != null &&
+            item.variant_id === variant.id &&
+            !isVirtualLocation(
+              locations.find((location) => location.id === item.loc_id) ?? {
+                id: item.loc_id,
+              }
+            ) &&
+            (item.product_id == null || item.product_id === product.id)
+          ) {
+            map[item.loc_id] = item.qty_onhand ?? 0;
+          }
         }
-        setOriginalQty(map);
+        setVariantLocationIds(Object.keys(map).map(Number));
         setLocationQty(map);
       } catch {
         if (!cancelled) {
-          setOriginalQty({});
+          setVariantLocationIds([]);
           setLocationQty({});
         }
       }
@@ -240,34 +253,23 @@ function VariantFormDialog({
     return () => {
       cancelled = true;
     };
-  }, [token, orgId, locations, locationsReady, variant?.id]);
+  }, [token, orgId, locations, locationsReady, variant?.id, product.id]);
 
-  const hasLocationRows = locations.length > 0;
+  // Stock is read-only here; new stock must be received through inventory.
+  const variantLocations = variant
+    ? locations.filter(
+        (location) =>
+          !isVirtualLocation(location) &&
+          variantLocationIds.includes(location.id)
+      )
+    : [];
+  const hasLocationRows = variantLocations.length > 0;
   const locationTotal = hasLocationRows
-    ? locations.reduce(
+    ? variantLocations.reduce(
         (sum, location) => sum + (locationQty[location.id] ?? 0),
         0
       )
     : undefined;
-
-  const locationChanges: LocationChange[] = hasLocationRows
-    ? locations
-        .map((location) => ({
-          location_id: location.id,
-          delta:
-            (locationQty[location.id] ?? 0) -
-            (originalQty[location.id] ?? 0),
-        }))
-        .filter((change) => change.delta !== 0)
-    : [];
-
-  const filteredLocations = locations.filter((location) => {
-    const keyword = locationSearch.trim().toLowerCase();
-    if (!keyword) return true;
-    return `${location.name ?? ""} ${locationAddress(location)}`
-      .toLowerCase()
-      .includes(keyword);
-  });
 
   const takenPositions = new Set(
     (product.options ?? []).map((option) => option.position ?? 0)
@@ -295,7 +297,8 @@ function VariantFormDialog({
   )?.src;
   const availableStock =
     variant?.inventory_advance?.qty_available ??
-    (tracking ? Number(form.inventory_quantity) || 0 : undefined);
+    variant?.inventory_quantity ??
+    (tracking ? 0 : undefined);
   const titlePreview =
     [form.option1, form.option2, form.option3]
       .map((value) => value.trim())
@@ -342,14 +345,7 @@ function VariantFormDialog({
           onSubmit={(event) => {
             event.preventDefault();
             onSave({
-              form: {
-                ...form,
-                inventory_quantity:
-                  locationTotal != null
-                    ? String(locationTotal)
-                    : form.inventory_quantity,
-              },
-              locationChanges,
+              form,
               newOptions: [],
             });
           }}
@@ -549,195 +545,50 @@ function VariantFormDialog({
               <div className="mt-4 space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="rounded-xl border border-[#e5e7df] bg-white px-4 py-3 dark:border-[#40453b] dark:bg-[#191c18]">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#858a80]">
-                      Tồn kho khả dụng
-                    </p>
-                    <p className="mt-1 text-lg font-extrabold tabular-nums">
-                      {availableStock ?? 0}
-                    </p>
+                    <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#858a80]">Tồn kho khả dụng</p>
+                    <p className="mt-1 text-lg font-extrabold tabular-nums">{availableStock ?? 0}</p>
                   </div>
-
-                  {hasLocationRows ? (
+                  {hasLocationRows && (
                     <div className="rounded-xl border border-[#e5e7df] bg-white px-4 py-3 dark:border-[#40453b] dark:bg-[#191c18]">
-                      <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#858a80]">
-                        Tồn đầu kỳ
-                      </p>
-                      <p className="mt-1 text-lg font-extrabold tabular-nums">
-                        {locationTotal ?? 0}
-                      </p>
-                    </div>
-                  ) : (
-                    <div>
-                      <span className="mb-1.5 block text-sm font-semibold">
-                        Tồn đầu kỳ
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          aria-label="Giảm tồn đầu kỳ"
-                          onClick={() =>
-                            set(
-                              "inventory_quantity",
-                              String(
-                                Math.max(
-                                  0,
-                                  (Number(form.inventory_quantity) || 0) - 1
-                                )
-                              )
-                            )
-                          }
-                          className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-[#e1e5dc] text-[#596052] hover:bg-[#f3f5ef] dark:border-[#40453b] dark:text-[#d3d8ce] dark:hover:bg-[#30342e]"
-                        >
-                          <i className="pi pi-minus" aria-hidden="true" />
-                        </button>
-                        <input
-                          type="number"
-                          min={0}
-                          value={form.inventory_quantity}
-                          onChange={(event) =>
-                            set("inventory_quantity", event.target.value)
-                          }
-                          className={`${INPUT_CLASS} w-28 text-center`}
-                        />
-                        <button
-                          type="button"
-                          aria-label="Tăng tồn đầu kỳ"
-                          onClick={() =>
-                            set(
-                              "inventory_quantity",
-                              String((Number(form.inventory_quantity) || 0) + 1)
-                            )
-                          }
-                          className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-[#e1e5dc] text-[#596052] hover:bg-[#f3f5ef] dark:border-[#40453b] dark:text-[#d3d8ce] dark:hover:bg-[#30342e]"
-                        >
-                          <i className="pi pi-plus" aria-hidden="true" />
-                        </button>
-                      </div>
+                      <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#858a80]">Tổng tồn tại các kho</p>
+                      <p className="mt-1 text-lg font-extrabold tabular-nums">{locationTotal ?? 0}</p>
                     </div>
                   )}
                 </div>
 
-                {hasLocationRows && (
-                  <div className="space-y-3">
-                    <label className="block">
-                      <span className="mb-1.5 block text-sm font-semibold">
-                        Tìm kho
-                      </span>
-                      <span className="relative block">
-                        <i
-                          className="pi pi-search absolute left-4 top-1/2 -translate-y-1/2 text-sm text-[#92988d]"
-                          aria-hidden="true"
-                        />
-                        <input
-                          type="search"
-                          value={locationSearch}
-                          onChange={(event) => setLocationSearch(event.target.value)}
-                          placeholder="Tìm theo tên kho hoặc địa chỉ..."
-                          className={`${INPUT_CLASS} pl-11`}
-                        />
-                      </span>
-                    </label>
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#dce8d6] bg-[#f5f9f2] px-4 py-3 dark:border-[#394633] dark:bg-[#20291d]">
+                  <p className="text-sm text-[#596052] dark:text-[#d3d8ce]">Muốn thay đổi số lượng, hãy tạo phiếu nhập hàng trong quản lý tồn kho.</p>
+                  <Link href={`/${locale}/inventory/receives`} className="inline-flex h-9 items-center gap-2 rounded-lg bg-[#527b49] px-3 text-sm font-bold text-white hover:bg-[#41643a]">
+                    <i className="pi pi-plus" aria-hidden="true" /> Nhập hàng
+                  </Link>
+                </div>
 
-                    <div>
-                      <span className="mb-1.5 block text-sm font-semibold">
-                        Kho hàng
-                      </span>
-                      <div className="space-y-2">
-                        {filteredLocations.length === 0 && (
-                          <p className="rounded-xl border border-dashed border-[#d8ddd3] px-4 py-3 text-sm text-[#858a80] dark:border-[#40453b]">
-                            Không tìm thấy kho phù hợp.
-                          </p>
-                        )}
-                        {filteredLocations.map((location) => {
-                          const quantity = locationQty[location.id] ?? 0;
-                          const changeLocation = (value: number) =>
-                            setLocationQty((prev) => ({
-                              ...prev,
-                              [location.id]: Math.max(0, value),
-                            }));
-                          return (
-                            <div
-                              key={location.id}
-                              className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#e5e7df] bg-white px-4 py-3 dark:border-[#40453b] dark:bg-[#191c18]"
-                            >
-                              <div className="min-w-0">
-                                <p className="flex items-center gap-2 text-sm font-semibold">
-                                  <i
-                                    className="pi pi-home text-[#71836a]"
-                                    aria-hidden="true"
-                                  />
-                                  {location.name || `Kho #${location.id}`}
-                                  {location.is_primary && (
-                                    <span className="rounded-full bg-[#eef2ee] px-2 py-0.5 text-[11px] font-bold text-[#71836a] dark:bg-[#30392c] dark:text-[#c4dfa9]">
-                                      Mặc định
-                                    </span>
-                                  )}
-                                </p>
-                                <p className="mt-0.5 truncate text-xs text-[#858a80]">
-                                  {locationAddress(location) || "Chưa có địa chỉ"}
-                                </p>
-                              </div>
-                              <div className="flex shrink-0 items-center gap-1">
-                                <button
-                                  type="button"
-                                  aria-label={`Giảm tồn kho ${location.name ?? ""}`}
-                                  onClick={() => changeLocation(quantity - 1)}
-                                  className="grid h-9 w-9 place-items-center rounded-lg border border-[#e1e5dc] text-[#596052] hover:bg-[#f3f5ef] dark:border-[#40453b] dark:text-[#d3d8ce] dark:hover:bg-[#30342e]"
-                                >
-                                  <i className="pi pi-minus" aria-hidden="true" />
-                                </button>
-                                <input
-                                  type="number"
-                                  min={0}
-                                  aria-label={`Tồn đầu kỳ tại ${location.name ?? ""}`}
-                                  value={quantity}
-                                  onChange={(event) =>
-                                    changeLocation(Number(event.target.value) || 0)
-                                  }
-                                  className="h-9 w-20 rounded-lg border border-[#e1e5dc] bg-[#fbfcf9] text-center text-sm font-semibold tabular-nums outline-none focus:border-[#7c9f70] dark:border-[#40453b] dark:bg-[#191c18]"
-                                />
-                                <button
-                                  type="button"
-                                  aria-label={`Tăng tồn kho ${location.name ?? ""}`}
-                                  onClick={() => changeLocation(quantity + 1)}
-                                  className="grid h-9 w-9 place-items-center rounded-lg border border-[#e1e5dc] text-[#596052] hover:bg-[#f3f5ef] dark:border-[#40453b] dark:text-[#d3d8ce] dark:hover:bg-[#30342e]"
-                                >
-                                  <i className="pi pi-plus" aria-hidden="true" />
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })}
+                {hasLocationRows && (
+                  <div className="space-y-2">
+                    <span className="block text-sm font-semibold">Tồn theo kho</span>
+                    {variantLocations.map((location) => (
+                      <div key={location.id} className="flex items-center justify-between gap-4 rounded-xl border border-[#e5e7df] bg-white px-4 py-3 dark:border-[#40453b] dark:bg-[#191c18]">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold">{location.name || `Kho #${location.id}`}</p>
+                          <p className="truncate text-xs text-[#858a80]">{locationAddress(location) || "Chưa có địa chỉ"}</p>
+                        </div>
+                        <span className="shrink-0 text-sm font-extrabold tabular-nums">{locationQty[location.id] ?? 0}</span>
                       </div>
-                    </div>
+                    ))}
                   </div>
                 )}
 
                 <label className="flex items-start gap-3 rounded-xl border border-[#e5e7df] bg-white px-4 py-3 dark:border-[#40453b] dark:bg-[#191c18]">
-                  <input
-                    type="checkbox"
-                    checked={form.inventory_policy === "continue"}
-                    onChange={(event) =>
-                      set("inventory_policy", event.target.checked ? "continue" : "deny")
-                    }
-                    className="mt-0.5 h-4 w-4 accent-[#527b49]"
-                  />
+                  <input type="checkbox" checked={form.inventory_policy === "continue"} onChange={(event) => set("inventory_policy", event.target.checked ? "continue" : "deny")} className="mt-0.5 h-4 w-4 accent-[#527b49]" />
                   <span>
-                    <span className="block text-sm font-semibold">
-                      Cho phép đặt hàng khi hết hàng
-                    </span>
-                    <span className="block text-xs text-[#858a80]">
-                      Khách vẫn có thể mua khi tồn kho về 0.
-                    </span>
+                    <span className="block text-sm font-semibold">Cho phép đặt hàng khi hết hàng</span>
+                    <span className="block text-xs text-[#858a80]">Khách vẫn có thể mua khi tồn kho về 0.</span>
                   </span>
                 </label>
               </div>
             ) : (
-              <p className="mt-4 rounded-xl border border-dashed border-[#d8ddd3] px-4 py-3 text-sm text-[#858a80] dark:border-[#40453b]">
-                Không theo dõi tồn kho — biến thể này luôn cho phép đặt hàng.
-              </p>
-            )}
-          </fieldset>
+              <p className="mt-4 rounded-xl border border-dashed border-[#d8ddd3] px-4 py-3 text-sm text-[#858a80] dark:border-[#40453b]">Không theo dõi tồn kho — biến thể này luôn cho phép đặt hàng.</p>
+            )}          </fieldset>
 
 
           <fieldset className="rounded-2xl border border-[#e8e9e2] bg-[#fbfcf9] p-4 dark:border-[#363b31] dark:bg-[#1b1e1a]">
@@ -869,7 +720,6 @@ export default function VariantManager({
 
   async function handleSave({
     form,
-    locationChanges,
     newOptions,
   }: VariantSavePayload) {
     if (!token || !product.id) return;
@@ -889,7 +739,6 @@ export default function VariantManager({
     }
 
     const payload = toPayload(form, Boolean(editing?.variant_units?.length));
-    const isNew = !editing?.id;
     setSaving(true);
     try {
       if (newOptions.length > 0) {
@@ -906,45 +755,13 @@ export default function VariantManager({
         await updateProduct(token, orgId, product.id, { options: merged });
       }
 
-      let savedVariantId = editing?.id;
       if (editing?.id) {
         await updateVariant(token, orgId, editing.id, payload);
         toast.success("Đã cập nhật biến thể.");
       } else {
-        const created = await createVariant(token, orgId, product.id, payload);
-        savedVariantId = created.variant?.id;
+        await createVariant(token, orgId, product.id, payload);
         toast.success("Đã tạo biến thể mới.");
       }
-
-      if (savedVariantId && locationChanges.length > 0) {
-        const failed: number[] = [];
-        for (const change of locationChanges) {
-          const body: InventoryAdjustPayload = {
-            location_id: change.location_id,
-            type: isNew ? "set" : "adjust",
-            reason: isNew ? "newproduct" : "correction",
-            note: "Cập nhật từ trang quản lý sản phẩm",
-            line_items: [
-              {
-                product_id: product.id,
-                product_variant_id: savedVariantId,
-                quantity: change.delta,
-              },
-            ],
-          };
-          try {
-            await adjustInventory(token, orgId, body);
-          } catch {
-            failed.push(change.location_id);
-          }
-        }
-        if (failed.length > 0) {
-          toast.warning(
-            `Đã lưu biến thể nhưng chưa cập nhật được tồn kho ở ${failed.length} kho.`
-          );
-        }
-      }
-
       setEditing(null);
       setAdding(false);
       await onReload();

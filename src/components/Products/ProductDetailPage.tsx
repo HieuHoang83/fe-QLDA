@@ -20,6 +20,7 @@ import {
   listInventoryLocations,
   listLocations,
   locationAddress,
+  isVirtualLocation,
   type HaravanLocation,
 } from "@/services/api/locations";
 import {
@@ -135,7 +136,9 @@ export default function ProductDetailPage({ productId }: ProductDetailPageProps)
     (async () => {
       try {
         const result = await listLocations(token, orgId);
-        if (!cancelled) setLocations(result.locations ?? []);
+        if (!cancelled) {
+          setLocations((result.locations ?? []).filter((location) => !isVirtualLocation(location)));
+        }
       } catch {
         if (!cancelled) setLocations([]);
       }
