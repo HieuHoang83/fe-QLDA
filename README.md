@@ -1,144 +1,95 @@
-This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# Haravan Admin — Frontend (Next.js 14)
 
-## II.4 FE - Kiến trúc FE + công nghệ FE
+Giao diện quản trị đơn hàng, khách hàng, sản phẩm và kho cho hệ thống Haravan Sync.
+Backend tương ứng: [`../Task1`](../Task1) (NestJS + MongoDB).
 
-### 1. Tổng quan kiến trúc FE
+---
 
-Frontend của hệ thống được xây dựng theo hướng **SPA/SSR hybrid** trên nền **Next.js 14 App Router**. Kiến trúc FE tách thành các lớp rõ ràng để dễ bảo trì, mở rộng và kiểm soát luồng dữ liệu từ giao diện đến backend.
+## 1. Công nghệ
 
-Luồng xử lý chính:
+| Thành phần | Công nghệ |
+|---|---|
+| Framework | Next.js 14 (App Router) + React 18 |
+| Ngôn ngữ | TypeScript |
+| Style | Tailwind CSS + PrimeReact |
+| Server state | TanStack React Query |
+| Auth | NextAuth (credentials, JWT) |
+| Đa ngôn ngữ | next-intl, prefix `[locale]` |
+| Thông báo | sonner |
 
-`UI/Component` -> `Page/Layout` -> `Service/API` -> `Axios Client` -> `Backend API`
-
-Trong đó:
-
-- `src/app`: quản lý định tuyến, layout, route group và tổ chức màn hình theo App Router.
-- `src/components`: chứa các thành phần giao diện có thể tái sử dụng như đăng nhập, menu, header, theme, toast.
-- `src/services/api`: đóng vai trò tầng gọi API theo nghiệp vụ, ví dụ `auth`, `document`.
-- `src/lib/api-client.ts`: lớp hạ tầng dùng chung cho request, cấu hình `baseURL`, gắn `Authorization Bearer token`, xử lý lỗi `401`.
-- `src/lib/providers` và `src/library`: quản lý các provider toàn cục như `React Query`, `NextAuth`, theme và progress bar.
-- `src/types`: định nghĩa mở rộng kiểu dữ liệu, đặc biệt cho `next-auth`.
-
-### 2. Tổ chức kiến trúc theo lớp
-
-#### 2.1. Lớp điều hướng và bố cục
-
-Hệ thống dùng **App Router** của Next.js với cấu trúc route theo thư mục:
-
-- `src/app/[locale]`: layout gốc theo ngôn ngữ.
-- `src/app/[locale]/(Guest)`: nhóm trang công khai như đăng nhập, đăng ký.
-- `src/app/[locale]/(User)`: nhóm trang cần xác thực như menu, chi tiết tài liệu.
-- `src/middleware.ts`: kết hợp `next-intl` và `next-auth` để xử lý locale và chặn truy cập vào các route private.
-
-Thiết kế này giúp tách biệt rõ:
-
-- khu vực công khai và khu vực yêu cầu đăng nhập;
-- phần layout dùng chung theo từng nhóm chức năng;
-- cơ chế đa ngôn ngữ ngay từ tầng route.
-
-#### 2.2. Lớp giao diện và tương tác người dùng
-
-Lớp giao diện được xây dựng bằng **React component** kết hợp **PrimeReact** và **Tailwind CSS**:
-
-- PrimeReact cung cấp các UI component sẵn có như `Button`, `Toast` và một số tiện ích giao diện.
-- Tailwind CSS được dùng để kiểm soát layout, spacing, responsive và custom theme nhanh ở mức class utility.
-- Các component được chia theo miền chức năng như `auth`, `Menu`, `header`, `Theme`, `SwitchLangue`.
-
-Kiến trúc component hiện tại phù hợp với mô hình:
-
-- `page/layout` chịu trách nhiệm ghép màn hình;
-- `component` chịu trách nhiệm hiển thị và xử lý tương tác;
-- `service` chịu trách nhiệm giao tiếp dữ liệu.
-
-#### 2.3. Lớp quản lý trạng thái và ngữ cảnh dùng chung
-
-Frontend đang sử dụng các cơ chế state sau:
-
-- **React local state** (`useState`) cho trạng thái cục bộ của form và component.
-- **Context Provider** cho theme thông qua `ThemeProvider`.
-- **NextAuth SessionProvider** để duy trì trạng thái xác thực người dùng.
-- **TanStack React Query** để chuẩn hóa việc quản lý dữ liệu bất đồng bộ và cache dữ liệu server-side trên client.
-
-Mặc dù hiện tại nghiệp vụ chưa quá lớn, việc đưa `ReactQueryProvider` vào layout gốc giúp hệ thống sẵn sàng mở rộng cho các màn hình có nhiều API, cần cache, refetch hoặc đồng bộ dữ liệu nền.
-
-#### 2.4. Lớp tích hợp API và xác thực
-
-Phần giao tiếp backend được tổ chức theo 2 mức:
-
-- `src/services/api/*.ts`: định nghĩa API theo từng domain nghiệp vụ.
-- `src/lib/api-client.ts`: cấu hình client dùng chung với interceptor.
-
-Các điểm chính của kiến trúc tích hợp:
-
-- dùng `axios` để chuẩn hóa request/response;
-- tự động lấy session từ `next-auth` để gắn access token vào header `Authorization`;
-- cache session ngắn hạn để giảm số lần gọi `/api/auth/session`;
-- tự động xử lý `401 Unauthorized` bằng cách xóa session và chuyển hướng về trang đăng nhập;
-- tách API public và API private để phù hợp với tài nguyên có/không yêu cầu xác thực.
-
-Đối với đăng nhập, hệ thống dùng `CredentialsProvider` của `next-auth`, gọi backend `/api/auth/login`, nhận JWT và lưu token vào session để tái sử dụng ở toàn bộ request tiếp theo.
-
-#### 2.5. Lớp đa ngôn ngữ và trải nghiệm dùng chung
-
-Ứng dụng tích hợp `next-intl` để hỗ trợ đa ngôn ngữ theo route, hiện có:
-
-- `vi`
-- `en`
-
-Phần layout gốc bọc bởi `NextIntlClientProvider`, cho phép component truy xuất text theo namespace. Đây là nền tảng phù hợp cho hệ thống quản lý có khả năng mở rộng cho nhiều nhóm người dùng và môi trường triển khai khác nhau.
-
-Ngoài ra, hệ thống còn bổ sung:
-
-- `next-nprogress-bar` để phản hồi trạng thái chuyển trang;
-- `sonner` để hiển thị toast notification;
-- theme switching để cải thiện trải nghiệm người dùng.
-
-### 3. Công nghệ FE sử dụng
-
-| Công nghệ | Vai trò trong hệ thống |
-| --- | --- |
-| `Next.js 14` | Framework FE chính, hỗ trợ App Router, SSR/CSR hybrid, tối ưu build và routing |
-| `React 18` | Xây dựng component, quản lý UI theo mô hình khai báo |
-| `TypeScript` | Tăng an toàn kiểu dữ liệu, giảm lỗi trong quá trình phát triển |
-| `Tailwind CSS` | Xây dựng giao diện nhanh, responsive và dễ tùy biến |
-| `PrimeReact` | Cung cấp bộ UI component sẵn có cho form và tương tác |
-| `Axios` | Thực hiện HTTP request tới backend, hỗ trợ interceptor |
-| `NextAuth` | Quản lý xác thực, session và tích hợp login theo provider |
-| `TanStack React Query` | Quản lý dữ liệu bất đồng bộ, cache và đồng bộ trạng thái server |
-| `next-intl` | Hỗ trợ đa ngôn ngữ theo locale |
-| `sonner` | Thông báo trạng thái thao tác cho người dùng |
-| `next-nprogress-bar` | Hiển thị tiến trình khi điều hướng trang |
-
-### 4. Đánh giá kiến trúc FE hiện tại
-
-Ưu điểm:
-
-- kiến trúc tách lớp tương đối rõ giữa UI, routing, provider và service;
-- phù hợp với bài toán hệ thống quản lý có xác thực và phân vùng màn hình;
-- dễ mở rộng thêm module nghiệp vụ mới theo cấu trúc thư mục hiện có;
-- đã có sẵn nền tảng cho i18n, session, cache dữ liệu và theme.
-
-Hạn chế cần cải thiện:
-
-- logic gọi API hiện còn phân tán giữa `services/api` và một số component, cần chuẩn hóa thêm;
-- chưa có lớp quản lý state nghiệp vụ tập trung cho các luồng phức tạp;
-- README ban đầu chưa phản ánh kiến trúc hệ thống, gây khó khăn khi onboarding;
-- một số cấu hình và thông báo đang hard-code, nên tách về constants/config/i18n message.
-
-### 5. Kết luận
-
-Kiến trúc FE hiện tại của dự án phù hợp với định hướng xây dựng một hệ thống quản lý tài liệu có xác thực, đa ngôn ngữ và khả năng mở rộng theo module. Việc lựa chọn `Next.js + React + TypeScript + NextAuth + Axios + Tailwind CSS + PrimeReact` tạo ra một nền tảng tương đối hiện đại, đủ linh hoạt để tiếp tục phát triển các tính năng nghiệp vụ trong các giai đoạn tiếp theo.
-
-## Getting Started
-
-First, run the development server:
+## 2. Chạy local
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.example .env.local     # hoặc tạo .env.local từ mẫu bên dưới
+npm run dev                    # http://localhost:3001
 ```
+
+FE cần backend chạy ở `http://localhost:3000`.
+
+| Lệnh | Tác dụng |
+|---|---|
+| `npm run dev` | Chạy dev server (port 3001) |
+| `npm run build` | Build production — chạy type-check và ESLint |
+| `npm start` | Chạy bản build |
+| `npm run lint` | ESLint |
+
+### Biến môi trường
+
+| Biến | Ý nghĩa |
+|---|---|
+| `NEXTAUTH_URL` | URL của FE, ví dụ `http://localhost:3001` |
+| `NEXTAUTH_SECRET` | Khóa ký session, sinh bằng `npx auth secret` |
+| `NEXT_PUBLIC_QLDAPM_API_URL` | Địa chỉ backend, ví dụ `http://localhost:3000` |
+| `NEXT_PUBLIC_HARAVAN_ORG_ID` | Shop mặc định khi vào app |
+| `NEXT_PUBLIC_HARAVAN_SHOP_NAME` | Tên hiển thị của shop |
+| `NEXT_PUBLIC_HARAVAN_SHOPS` | Danh sách shop dạng JSON để chuyển shop |
+
+## 3. Cấu trúc thư mục
+
+```
+src/
+  app/
+    [locale]/                layout theo ngôn ngữ + toàn bộ trang
+      page.tsx               danh sách đơn hàng
+      customers/             khách hàng
+      products/              sản phẩm + chi tiết sản phẩm
+      orders/[id]/           chi tiết đơn hàng
+      inventory/             kho: phiếu mua, phiếu nhập, kiểm kho, chuyển kho, điều chỉnh
+      settings/              cấu hình shop
+    api/auth/[...nextauth]   route NextAuth
+  components/                component dùng chung theo nghiệp vụ
+    Orders/  Products/  Customers/  Inventory/  haravan/  ui/  auth/
+  services/api/              lớp gọi API theo nghiệp vụ (orders, products, inventory...)
+  lib/                       tiện ích dùng chung
+    api-client.ts            axios client chung (baseURL, Bearer token, refresh 401)
+    haravan-format.ts        format tiền tệ, ngày, ảnh sản phẩm
+    token-refresh.ts         tự làm mới access token khi 401
+  context/                   context dùng chung (ShopContext...)
+  library/, types/           provider toàn cục và kiểu dữ liệu
+  middleware.ts              bảo vệ route + định tuyến locale
+```
+
+Quy ước chia component trong `components/<Domain>/`:
+
+- `<Domain>Page.tsx` — trang chính: gom dữ liệu, chứa bảng/danh sách.
+- `<Domain><Dialog>.tsx` — hộp thoại tạo / sửa / chi tiết.
+- `<domain>.form.ts` hoặc `<domain>.utils.ts` — chuyển đổi dữ liệu, không phụ thuộc React.
+
+## 4. Quy ước
+
+- **Mọi lời gọi API nằm trong `src/services/api`**, không gọi `axios` trực tiếp trong component.
+- Component nhận dữ liệu qua props hoặc hook; không tự `useEffect` + fetch rải rác.
+- Mỗi nghiệp vụ có một thư mục trong `src/components` và một file API tương ứng.
+- Tiền tệ và ngày luôn format qua `src/lib/haravan-format.ts` để hiển thị nhất quán.
+- `middleware.ts` chặn truy cập khi chưa đăng nhập và chuyển hướng về locale hợp lệ.
+
+## 5. Liên kết backend
+
+FE chỉ nói chuyện với backend, không gọi Haravan trực tiếp:
+
+```
+Component → services/api → lib/api-client → http://localhost:3000/api → NestJS → Haravan API
+```
+
+Danh sách endpoint và luồng webhook được mô tả trong [`../Task1/README.md`](../Task1/README.md).

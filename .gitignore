@@ -34,3 +34,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# script/ky thuat tam thoi khong commit
+tmpcheck*/
+_p*.cjs
+_p*.mjs
+*.stackdump
