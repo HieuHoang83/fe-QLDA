@@ -7,7 +7,6 @@ import { useLocale } from "next-intl";
 import { toast } from "sonner";
 import { useShop } from "@/context/ShopContext";
 import HaravanShell from "@/components/haravan/HaravanShell";
-import VariantPicker from "@/components/Products/VariantPicker";
 import VariantManager from "@/components/Products/VariantManager";
 import {
   getProduct,
@@ -15,22 +14,6 @@ import {
   type HaravanProduct,
   type HaravanProductVariant,
 } from "@/services/api/products";
-import {
-  listInventoryLocations,
-  listLocations,
-  locationAddress,
-  isVirtualLocation,
-  type HaravanLocation,
-} from "@/services/api/locations";
-import {
-  createCollect,
-  createCustomCollection,
-  deleteCollect,
-  listCollects,
-  listCustomCollections,
-  type HaravanCollect,
-  type HaravanCustomCollection,
-} from "@/services/api/collections";
 import { firstImage, formatDate } from "@/lib/haravan-format";
 import { Frame, InfoRow } from "@/components/Products/ProductPanels";
 import { ProductEditDialog } from "@/components/Products/ProductEditDialog";
@@ -85,150 +68,6 @@ export default function ProductDetailPage({ productId }: ProductDetailPageProps)
     }
   }, [product, mainImage]);
 
-  const handleVariantChange = useCallback(
-    (variant: HaravanProductVariant) => setSelectedVariant(variant),
-    []
-  );
-
-  const [locations, setLocations] = useState<HaravanLocation[]>([]);
-  const [locationQty, setLocationQty] = useState<Record<number, number>>({});
-
-  useEffect(() => {
-    if (!token || !orgId) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const result = await listLocations(token, orgId);
-        if (!cancelled) {
-          setLocations((result.locations ?? []).filter((location) => !isVirtualLocation(location)));
-        }
-      } catch {
-        if (!cancelled) setLocations([]);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [token, orgId]);
-
-  useEffect(() => {
-    if (!token || !orgId || !selectedVariant?.id || locations.length === 0) {
-      setLocationQty({});
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      try {
-        const result = await listInventoryLocations(token, orgId, {
-          variant_ids: String(selectedVariant.id),
-          location_ids: locations.map((location) => location.id).join(","),
-        });
-        if (cancelled) return;
-        const map: Record<number, number> = {};
-        for (const item of result.inventory_locations ?? []) {
-          if (item.loc_id != null) map[item.loc_id] = item.qty_onhand ?? 0;
-        }
-        setLocationQty(map);
-      } catch {
-        if (!cancelled) setLocationQty({});
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [token, orgId, selectedVariant?.id, locations]);
-
-  const [collections, setCollections] = useState<HaravanCustomCollection[]>([]);
-  const [collects, setCollects] = useState<HaravanCollect[]>([]);
-  const [collectionsLoading, setCollectionsLoading] = useState(true);
-  const [togglingCollection, setTogglingCollection] = useState<number | null>(
-    null
-  );
-  const [newCollection, setNewCollection] = useState("");
-  const [creatingCollection, setCreatingCollection] = useState(false);
-
-  const loadCollections = useCallback(async () => {
-    if (!token || !orgId) return;
-    setCollectionsLoading(true);
-    try {
-      const [collectionList, collectList] = await Promise.all([
-        listCustomCollections(token, orgId, { limit: 250 }),
-        listCollects(token, orgId, { product_id: productId }),
-      ]);
-      setCollections(collectionList.collections ?? []);
-      setCollects(collectList.collects ?? []);
-    } catch (loadError) {
-      setCollections([]);
-      setCollects([]);
-      toast.error(
-        loadError instanceof Error
-          ? loadError.message
-          : "Không tải được danh sách nhóm sản phẩm."
-      );
-    } finally {
-      setCollectionsLoading(false);
-    }
-  }, [token, orgId, productId]);
-
-  useEffect(() => {
-    void loadCollections();
-  }, [loadCollections]);
-
-  async function toggleCollection(collection: HaravanCustomCollection) {
-    if (!token || !orgId || !product?.id || collection.id == null) return;
-    const existing = collects.find(
-      (item) => item.collection_id === collection.id
-    );
-    setTogglingCollection(collection.id);
-    try {
-      if (existing?.id != null) {
-        await deleteCollect(token, orgId, existing.id);
-        setCollects((prev) => prev.filter((item) => item.id !== existing.id));
-        toast.success(`Đã bỏ sản phẩm khỏi nhóm "${collection.title ?? ""}".`);
-      } else {
-        const result = await createCollect(token, orgId, {
-          product_id: product.id,
-          collection_id: collection.id,
-        });
-        if (result.collect) {
-          setCollects((prev) => [...prev, result.collect]);
-        }
-        toast.success(`Đã thêm sản phẩm vào nhóm "${collection.title ?? ""}".`);
-      }
-    } catch (toggleError) {
-      toast.error(
-        toggleError instanceof Error
-          ? toggleError.message
-          : "Không cập nhật được nhóm sản phẩm."
-      );
-      await loadCollections();
-    } finally {
-      setTogglingCollection(null);
-    }
-  }
-
-  async function handleCreateCollection() {
-    const title = newCollection.trim();
-    if (!token || !orgId || !title) return;
-    setCreatingCollection(true);
-    try {
-      const result = await createCustomCollection(token, orgId, { title });
-      if (result.collection) {
-        setCollections((prev) => [...prev, result.collection]);
-      }
-      setNewCollection("");
-      toast.success(`Đã tạo nhóm "${title}".`);
-    } catch (createError) {
-      toast.error(
-        createError instanceof Error
-          ? createError.message
-          : "Không tạo được nhóm sản phẩm."
-      );
-    } finally {
-      setCreatingCollection(false);
-    }
-  }
-
   async function handleSaveProduct(form: ProductFormState) {
     if (!token || !product?.id) return;
     setSaving(true);
@@ -253,9 +92,9 @@ export default function ProductDetailPage({ productId }: ProductDetailPageProps)
     }
   }
 
-  const variant = selectedVariant;
-  const tracking = Boolean(variant?.inventory_management);
-  const available = variant?.inventory_advance?.qty_available;
+  // Không cò panel chọn biến thể để dùng biến thể đầu tiên.
+  const variant: HaravanProductVariant | null =
+    product?.variants?.[0] ?? null;
   const baseUnit =
     variant?.variant_units?.find((unit) => unit.base)?.unit ?? "";
 
@@ -404,100 +243,6 @@ export default function ProductDetailPage({ productId }: ProductDetailPageProps)
           </Frame>
 
           <div className="grid gap-5 lg:grid-cols-2">
-            <Frame title="Chi tiết biến thể" icon="pi-tags">
-              <VariantPicker
-                product={product}
-                onImageChange={setMainImage}
-                onVariantChange={handleVariantChange}
-              />
-            </Frame>
-
-            <Frame title="Quản lý tồn kho" icon="pi-box">
-              {variant ? (
-                <div className="divide-y divide-[#f2f3ef] dark:divide-[#30342e]">
-                  <InfoRow label="SKU" value={variant.sku || "—"} />
-                  <InfoRow label="Barcode" value={variant.barcode || "—"} />
-                  <InfoRow
-                    label="Theo dõi tồn kho"
-                    value={
-                      tracking ? (
-                        <span className="text-[#26733c] dark:text-[#c4dfa9]">Có</span>
-                      ) : (
-                        <span className="text-[#969b91]">Không</span>
-                      )
-                    }
-                  />
-                  <InfoRow
-                    label="Tồn kho khả dụng"
-                    value={
-                      tracking ? (
-                        <span className="tabular-nums">
-                          {available ?? variant.inventory_quantity ?? 0}
-                        </span>
-                      ) : (
-                        "Không theo dõi"
-                      )
-                    }
-                  />
-                  {tracking && locations.length > 0 ? (
-                    <div className="border-b border-[#f2f3ef] py-2.5 text-sm last:border-0 dark:border-[#30342e]">
-                      <span className="block text-[#858a80] dark:text-[#aeb4a8]">
-                        Kho hàng
-                      </span>
-                      <ul className="mt-2 space-y-2">
-                        {locations.map((location) => (
-                          <li
-                            key={location.id}
-                            className="flex items-center justify-between gap-3"
-                          >
-                            <span className="min-w-0">
-                              <span className="block truncate font-semibold">
-                                {location.name || `Kho #${location.id}`}
-                              </span>
-                              <span className="block truncate text-xs font-normal text-[#858a80]">
-                                {locationAddress(location) || "Chưa có địa chỉ"}
-                              </span>
-                            </span>
-                            <span className="shrink-0 rounded-lg bg-[#f1f3ef] px-2.5 py-1 text-xs font-bold tabular-nums dark:bg-[#30342e]">
-                              {locationQty[location.id] ?? 0}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ) : (
-                    <InfoRow label="Kho hàng" value="—" />
-                  )}
-                  <InfoRow
-                    label="Tồn đầu kỳ"
-                    value={
-                      tracking ? (
-                        <span className="tabular-nums">
-                          {variant.inventory_quantity ?? 0}
-                        </span>
-                      ) : (
-                        "—"
-                      )
-                    }
-                  />
-                  <InfoRow
-                    label="Khi hết hàng"
-                    value={
-                      !tracking
-                        ? "—"
-                        : variant.inventory_policy === "continue"
-                          ? "Cho phép đặt hàng"
-                          : "Từ chối đặt hàng"
-                    }
-                  />
-                </div>
-              ) : (
-                <p className="text-sm text-[#858a80]">Chưa chọn biến thể.</p>
-              )}
-            </Frame>
-          </div>
-
-          <div className="grid gap-5 lg:grid-cols-2">
             <Frame title="Vận chuyển" icon="pi-truck">
               {variant ? (
                 <div className="divide-y divide-[#f2f3ef] dark:divide-[#30342e]">
@@ -554,94 +299,6 @@ export default function ProductDetailPage({ productId }: ProductDetailPageProps)
               </p>
             </Frame>
           </div>
-
-          <Frame title="Nhóm sản phẩm" icon="pi-folder">
-            <p className="text-sm text-[#858a80] dark:text-[#aeb4a8]">
-              Chọn nhóm để gán sản phẩm này vào. Một sản phẩm có thể thuộc
-              nhiều nhóm.
-            </p>
-
-            <div className="mt-3 space-y-2">
-              {collectionsLoading ? (
-                <p className="inline-flex items-center gap-2 rounded-xl border border-dashed border-[#d8ddd3] px-4 py-3 text-sm text-[#858a80] dark:border-[#40453b]">
-                  <i className="pi pi-spin pi-spinner" aria-hidden="true" />
-                  Đang tải danh sách nhóm...
-                </p>
-              ) : collections.length === 0 ? (
-                <p className="rounded-xl border border-dashed border-[#d8ddd3] px-4 py-3 text-sm text-[#858a80] dark:border-[#40453b]">
-                  Chưa có nhóm sản phẩm nào. Tạo nhóm mới ở bên dưới.
-                </p>
-              ) : (
-                collections.map((collection) => {
-                  const checked = collects.some(
-                    (item) => item.collection_id === collection.id
-                  );
-                  const busy = togglingCollection === collection.id;
-                  return (
-                    <label
-                      key={collection.id}
-                      className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-[#e5e7df] bg-white px-4 py-3 hover:border-[#c6d4bf] dark:border-[#40453b] dark:bg-[#191c18] dark:hover:border-[#527b49]"
-                    >
-                      <span className="flex min-w-0 items-center gap-3">
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          disabled={busy}
-                          onChange={() => void toggleCollection(collection)}
-                          className="h-4 w-4 shrink-0 accent-[#527b49]"
-                        />
-                        <span className="min-w-0">
-                          <span className="block truncate text-sm font-semibold">
-                            {collection.title || `Nhóm #${collection.id}`}
-                          </span>
-                          <span className="block truncate text-xs text-[#858a80]">
-                            {collection.handle ? `/${collection.handle} — ` : ""}
-                            {collection.products_count ?? 0} sản phẩm
-                          </span>
-                        </span>
-                      </span>
-                      {busy ? (
-                        <i
-                          className="pi pi-spin pi-spinner text-[#71836a]"
-                          aria-hidden="true"
-                        />
-                      ) : checked ? (
-                        <span className="shrink-0 rounded-full bg-[#eef2ee] px-2.5 py-0.5 text-[11px] font-bold text-[#26733c] dark:bg-[#30392c] dark:text-[#c4dfa9]">
-                          Đang gán
-                        </span>
-                      ) : null}
-                    </label>
-                  );
-                })
-              )}
-            </div>
-
-            <form
-              className="mt-4 flex flex-wrap gap-2"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void handleCreateCollection();
-              }}
-            >
-              <input
-                type="text"
-                value={newCollection}
-                onChange={(event) => setNewCollection(event.target.value)}
-                placeholder="Tên nhóm mới, ví dụ: Áo hè"
-                className="h-11 min-w-0 flex-1 rounded-xl border border-[#e1e5dc] bg-[#fbfcf9] px-4 text-sm outline-none focus:border-[#7c9f70] dark:border-[#40453b] dark:bg-[#191c18]"
-              />
-              <button
-                type="submit"
-                disabled={creatingCollection || !newCollection.trim()}
-                className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#527b49] px-4 text-sm font-bold text-white hover:bg-[#41643a] disabled:cursor-wait disabled:opacity-60"
-              >
-                {creatingCollection && (
-                  <i className="pi pi-spin pi-spinner" aria-hidden="true" />
-                )}
-                Tạo nhóm
-              </button>
-            </form>
-          </Frame>
 
           {product.body_html && (
             <Frame title="Mô tả sản phẩm" icon="pi-align-left">

@@ -18,13 +18,61 @@ import {
   type HaravanProduct,
 } from "@/services/api/products";
 import {
+  createVariant,
+  listVariants,
+  updateVariant,
+  type VariantPayload,
+} from "@/services/api/variants";
+import {
   firstImage,
   formatDate,
   formatMoney,
   productPrice,
   productStock,
 } from "@/lib/haravan-format";
-import { emptyForm, type ProductFormState } from "@/components/Products/product.form";
+import {
+  toFirstVariantPayload,
+  type ProductFormState,
+} from "@/components/Products/product.form";
+
+/**
+ * Haravan tự sinh 1 biến thể mặc định khi tạo sản phẩm.
+ * Ghi đè thông tin biến thể đầu tiên do người dùng nhập trong form tạo sản phẩm.
+ */
+async function applyFirstVariant(
+  token: string,
+  orgId: string,
+  product: HaravanProduct,
+  form: ProductFormState
+): Promise<void> {
+  if (!product.id) return;
+  const payload: VariantPayload = toFirstVariantPayload(form.firstVariant);
+
+  let variantId = product.variants?.find((variant) => variant.id)?.id;
+  if (!variantId) {
+    const list = await listVariants(token, orgId, product.id, { limit: 1 });
+    variantId = list.variants?.[0]?.id;
+  }
+
+  if (!variantId) {
+    await createVariant(token, orgId, product.id, payload);
+    return;
+  }
+
+  try {
+    await updateVariant(token, orgId, variantId, payload);
+  } catch (error) {
+    // Một số shop không cho sửa tồn kho qua API biến thể -> thử lại bỏ tồn kho.
+    if (payload.inventory_quantity === undefined) throw error;
+    await updateVariant(token, orgId, variantId, {
+      ...payload,
+      inventory_quantity: undefined,
+    });
+    toast.warning(
+      "Không khởi tạo được tồn kho tự động, hãy tạo phiếu nhập hàng để cộng tồn."
+    );
+  }
+}
 
 export default function ProductsPage() {
   const { data: session } = useSession();
@@ -118,12 +166,21 @@ export default function ProductsPage() {
           product_type: form.product_type,
           tags: form.tags,
         });
+        await applyFirstVariant(token, orgId, result.product, form).catch(
+          (variantError) =>
+            toast.warning(
+              variantError instanceof Error
+                ? `Không lưu được biến thể đầu tiên: ${variantError.message}`
+                : "Không lưu được biến thể đầu tiên."
+            )
+        );
         setProducts((prev) => [result.product, ...prev]);
         setTotal((prev) => prev + 1);
         setEditing(null);
         toast.success(`Đã tạo sản phẩm "${result.product.title}".`, {
           description: result.product.handle ?? "",
         });
+        void load();
       }
     } catch (saveError) {
       toast.error(

@@ -181,9 +181,35 @@ export default function OrderDetailView({
   const discountCount = order.payload?.discount_codes?.length
     ?? order.payload?.discount_applications?.length
     ?? 0;
-  const paidAmount = numericValue(order.payload?.total_paid);
-  const refundedAmount = numericValue(order.payload?.total_refunded);
-  const receivedAmount = numericValue(order.payload?.total_received);
+  /**
+   * Payload đơn hàng của Haravan không có `total_paid`/`total_refunded`, nên
+   * phải cộng từ danh sách giao dịch (`Capture` mới là tiền thật, `Pending`
+   * của COD chưa thu).
+   */
+  const sumTransactions = (match: (kind: string, status: string) => boolean) =>
+    transactions
+      .filter((transaction) =>
+        match(
+          String(transaction.kind ?? "").toLowerCase(),
+          String(transaction.status ?? "").toLowerCase(),
+        ),
+      )
+      .reduce((sum, transaction) => sum + (Number(transaction.amount) || 0), 0);
+
+  const paidFromTransactions = sumTransactions(
+    (kind, status) =>
+      (kind === "sale" || kind === "capture") && status !== "failure" && status !== "error",
+  );
+  const refundedFromTransactions = sumTransactions((kind) => kind === "refund");
+
+  const paidAmount = numericValue(order.payload?.total_paid)
+    ?? (paidFromTransactions > 0 ? paidFromTransactions : undefined);
+  const refundedAmount = numericValue(order.payload?.total_refunded)
+    ?? (refundedFromTransactions > 0 ? refundedFromTransactions : undefined);
+  const receivedAmount = numericValue(order.payload?.total_received)
+    ?? (paidAmount !== undefined || refundedAmount !== undefined
+      ? Math.max(0, (paidAmount ?? 0) - (refundedAmount ?? 0))
+      : undefined);
   const subtotal = order.subtotalPrice
     ?? order.lineItems?.reduce((sum, item) => sum + (item.price ?? 0) * (item.quantity ?? 0), 0)
     ?? 0;

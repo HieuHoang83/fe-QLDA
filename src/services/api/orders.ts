@@ -42,6 +42,7 @@ export interface OrderDiscountCode {
 
 export interface OrderPayloadDetails {
   status?: string | null;
+  financial_status?: string | null;
   confirmed_status?: string | null;
   cancelled_status?: string | null;
   cancelled_at?: string | null;
@@ -68,6 +69,12 @@ export interface OrderPayloadDetails {
     value_type?: string;
     allocation_method?: string;
     target_type?: string;
+  }> | null;
+  transactions?: Array<{
+    amount?: number | string | null;
+    kind?: string | null;
+    status?: string | null;
+    gateway?: string | null;
   }> | null;
 }
 
@@ -171,6 +178,58 @@ export interface OrdersPage {
 export interface OrderDetails {
   order: OrderRecord;
   events: OrderEvent[];
+}
+
+/**
+ * Kết quả trả về ngay khi thao tác được đẩy vào hàng đợi.
+ * Đơn hàng chưa chắc đã xử lý xong trên Haravan, FE phải poll `getJobStatus`.
+ */
+export interface JobAccepted {
+  queued: boolean;
+  jobId: string;
+  action: string;
+  status: "pending";
+}
+
+export type JobStatusValue = "pending" | "running" | "completed" | "failed";
+
+export interface JobStatus {
+  id: string;
+  name: string;
+  status: JobStatusValue;
+  attempts: number;
+  maxAttempts: number;
+  error?: string | null;
+  result?: string | null;
+}
+
+export interface JobResult {
+  message?: string;
+  haravanOrderId?: number;
+  confirmed?: boolean;
+}
+
+/** Đọc nội dung `result` do BE ghi kèm khi worker xử lý xong. */
+export function parseJobResult(job: JobStatus | null): JobResult {
+  if (!job?.result) return {};
+  try {
+    const parsed = JSON.parse(job.result) as JobResult;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return { message: job.result };
+  }
+}
+
+/** Lấy trạng thái công việc đã đẩy lên Haravan. */
+export function getJobStatus(
+  token: string,
+  orgId: number | string,
+  jobId: string
+): Promise<JobStatus> {
+  return request<JobStatus>(
+    `/${encodeURIComponent(orgId)}/jobs/${encodeURIComponent(jobId)}`,
+    token
+  );
 }
 
 export interface CreateOrderInput {
@@ -297,7 +356,7 @@ export function confirmOrder(
   token: string,
   order: Pick<OrderRecord, "orgId" | "haravanOrderId">,
   actor: string
-): Promise<{ confirmed: boolean; status: string }> {
+): Promise<JobAccepted> {
   return request(
     `/${encodeURIComponent(order.orgId)}/${encodeURIComponent(order.haravanOrderId)}/confirm`,
     token,
@@ -312,8 +371,8 @@ export function createOrder(
   token: string,
   orgId: string,
   body: CreateOrderInput
-): Promise<OrderRecord> {
-  return request<OrderRecord>(`/${encodeURIComponent(orgId)}/create`, token, {
+): Promise<JobAccepted> {
+  return request<JobAccepted>(`/${encodeURIComponent(orgId)}/create`, token, {
     method: "POST",
     body,
   });
@@ -342,9 +401,49 @@ export function refundableAmount(order: OrderRecord): {
   refunded: number;
   remaining: number;
 } {
-  const paid = toNumber(order.payload?.total_paid ?? order.totalPrice);
+  const paid = paidAmountOf(order);
   const refunded = toNumber(order.payload?.total_refunded);
   return { paid, refunded, remaining: Math.max(0, paid - refunded) };
+}
+
+/**
+ * Số tiền khách còn phải trả cho đơn.
+ *
+ * Đơn COD của Haravan tạo sẵn một giao dịch `pending` đúng bằng tổng tiền, nhưng
+ * tiền chưa thu nên `total_paid` vẫn là 0. Vì vậy phải bỏ qua giao dịch `pending`
+ * khi tính phần đã thu, nếu không đơn COD sẽ bị coi là đã trả đủ.
+ */
+export function amountDue(order: OrderRecord): number {
+  const total = toNumber(order.totalPrice);
+  return Math.max(0, total - paidAmountOf(order));
+}
+
+/** Phần tiền đã thu thật: bỏ qua giao dịch `pending`, `void` và các giao dịch lỗi. */
+function paidAmountOf(order: OrderRecord): number {
+  const fromPayload = order.payload?.total_paid;
+  if (fromPayload !== undefined && fromPayload !== null && fromPayload !== "") {
+    return toNumber(fromPayload);
+  }
+
+  const transactions = order.payload?.transactions ?? [];
+  if (transactions.length) {
+    return transactions
+      .filter((transaction) => {
+        const kind = String(transaction.kind ?? "").toLowerCase();
+        const status = String(transaction.status ?? "").toLowerCase();
+        if (status === "failure" || status === "error") return false;
+        return kind === "sale" || kind === "capture";
+      })
+      .reduce((sum, transaction) => sum + toNumber(transaction.amount), 0);
+  }
+
+  const financialStatus = String(
+    order.financialStatus ?? order.payload?.financial_status ?? "",
+  ).toLowerCase();
+  if (financialStatus === "paid" || financialStatus === "partially_paid") {
+    return toNumber(order.totalPrice);
+  }
+  return 0;
 }
 
 export interface CancelOrderInput {
@@ -395,7 +494,7 @@ export function cancelOrder(
   token: string,
   order: Pick<OrderRecord, "orgId" | "haravanOrderId">,
   input: CancelOrderInput = {}
-): Promise<{ cancelled: boolean; order: OrderRecord }> {
+): Promise<JobAccepted> {
   return request(`${orderKey(order)}/cancel`, token, {
     method: "POST",
     body: input,
@@ -406,7 +505,7 @@ export function closeOrder(
   token: string,
   order: Pick<OrderRecord, "orgId" | "haravanOrderId">,
   actor?: string
-): Promise<{ closed: boolean; order: OrderRecord }> {
+): Promise<JobAccepted> {
   return request(`${orderKey(order)}/close`, token, {
     method: "POST",
     body: { actor },
@@ -417,7 +516,7 @@ export function openOrder(
   token: string,
   order: Pick<OrderRecord, "orgId" | "haravanOrderId">,
   actor?: string
-): Promise<{ opened: boolean; order: OrderRecord }> {
+): Promise<JobAccepted> {
   return request(`${orderKey(order)}/open`, token, {
     method: "POST",
     body: { actor },
@@ -428,7 +527,7 @@ export function updateOrder(
   token: string,
   order: Pick<OrderRecord, "orgId" | "haravanOrderId">,
   input: UpdateOrderInput
-): Promise<{ updated: boolean; order: OrderRecord }> {
+): Promise<JobAccepted> {
   return request(orderKey(order), token, {
     method: "PUT",
     body: input,
@@ -439,7 +538,7 @@ export function refundOrder(
   token: string,
   order: Pick<OrderRecord, "orgId" | "haravanOrderId">,
   input: RefundOrderInput
-): Promise<{ refunded: boolean; order: OrderRecord }> {
+): Promise<JobAccepted> {
   const { actor, ...rest } = input;
   return request(`${orderKey(order)}/refunds`, token, {
     method: "POST",
@@ -491,7 +590,7 @@ export function createTransaction(
   token: string,
   order: Pick<OrderRecord, "orgId" | "haravanOrderId">,
   body: { amount: number; kind: string; gateway?: string; parent_id?: number; note?: string }
-): Promise<{ transaction: Transaction; success: boolean }> {
+): Promise<JobAccepted> {
   return request(`${orderKey(order)}/transactions`, token, {
     method: "POST",
     body,

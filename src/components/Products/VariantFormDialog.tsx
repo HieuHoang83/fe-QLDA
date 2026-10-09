@@ -16,7 +16,9 @@ import {
   type HaravanProductVariant,
 } from "@/services/api/products";
 import {
+  digitsOnly,
   formatMoney,
+  formatThousands,
   isOutOfStock,
   variantImage,
   variantLabel,
@@ -30,6 +32,7 @@ import {
   type VariantFormState,
   type VariantSavePayload,
 } from "./variant.form";
+import { FieldLabel, InfoHint } from "@/components/ui/InfoHint";
 
 const INPUT_CLASS =
   "h-11 w-full rounded-xl border border-[#e1e5dc] bg-[#fbfcf9] px-4 text-sm outline-none focus:border-[#7c9f70] dark:border-[#40453b] dark:bg-[#191c18]";
@@ -158,6 +161,7 @@ export function VariantFormDialog({
       fixed: true,
     })),
   ].sort((a, b) => a.position - b.position);
+  const hasOptions = (product.options ?? []).length > 0;
 
   const price = Number(form.price);
   const compare = Number(form.compare_at_price);
@@ -176,14 +180,6 @@ export function VariantFormDialog({
     variant?.inventory_advance?.qty_available ??
     variant?.inventory_quantity ??
     (tracking ? 0 : undefined);
-  const titlePreview =
-    [form.option1, form.option2, form.option3]
-      .map((value) => value.trim())
-      .filter(Boolean)
-      .join(" / ") ||
-    (variant?.title && variant.title !== "Default Title"
-      ? variant.title
-      : "Mặc định");
 
   return (
     <div
@@ -219,6 +215,7 @@ export function VariantFormDialog({
         </header>
 
         <form
+          id={`variant-form-${product.id ?? 0}`}
           onSubmit={(event) => {
             event.preventDefault();
             onSave({
@@ -240,9 +237,11 @@ export function VariantFormDialog({
                     <div key={slot.position}>
                       {slot.fixed ? (
                         <label className="block">
-                          <span className="mb-1.5 block text-sm font-semibold">
+                          <FieldLabel
+                            hint={`Giá trị của thuộc tính "${slot.name}" cho biến thể này, ví dụ: Đỏ, XL, 500ml. Hai biến thể không được trùng tổ hợp lựa chọn.`}
+                          >
                             {slot.name}
-                          </span>
+                          </FieldLabel>
                           <input
                             type="text"
                             required
@@ -264,26 +263,29 @@ export function VariantFormDialog({
                   ))}
                 </div>
 
-                <p className="text-xs text-[#858a80]">
-                  Thuộc tính biến thể được lấy từ thuộc tính sản phẩm.
-                </p>
-
-                <label className="block">
-                  <span className="mb-1.5 block text-sm font-semibold">Tiêu đề</span>
-                  <input
-                    type="text"
-                    readOnly
-                    value={titlePreview}
-                    className={`${INPUT_CLASS} cursor-not-allowed bg-[#f1f3ee] text-[#596052] dark:bg-[#252923] dark:text-[#d3d8ce]`}
-                  />
-                  <span className="mt-1 block text-xs text-[#858a80]">
-                    Tên hiển thị của biến thể, tự ghép từ các lựa chọn ở trên.
-                  </span>
-                </label>
+                {!hasOptions && (
+                  <label className="block">
+                    <FieldLabel hint="Sản phẩm chưa có thuộc tính (option) nên bạn tự đặt tên biến thể. Để trống thì hệ thống hiển thị là “Mặc định”.">
+                      Tên biến thể
+                    </FieldLabel>
+                    <input
+                      type="text"
+                      value={form.title}
+                      onChange={(event) => set("title", event.target.value)}
+                      placeholder="Mặc định"
+                      className={INPUT_CLASS}
+                    />
+                  </label>
+                )}
               </div>
 
               <div>
-                <span className="mb-1.5 block text-sm font-semibold">Ảnh</span>
+                <span className="mb-1.5 block text-sm font-semibold">
+                  <span className="flex items-center gap-1.5">
+                    <span>Ảnh</span>
+                    <InfoHint text="Ảnh riêng cho biến thể này. Để “Ảnh mặc định” thì biến thể dùng ảnh đầu tiên của sản phẩm." />
+                  </span>
+                </span>
                 <div className="grid aspect-square place-items-center overflow-hidden rounded-xl border border-[#e5e7df] bg-white dark:border-[#40453b] dark:bg-[#191c18]">
                   {previewImage ? (
                     <img src={previewImage} alt="" className="h-full w-full object-cover" />
@@ -315,14 +317,17 @@ export function VariantFormDialog({
             </legend>
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block">
-                <span className="mb-1.5 block text-sm font-semibold">Giá bán</span>
+                <FieldLabel hint="Số tiền khách phải trả cho 1 biến thể. Được tự động chèn dấu chấm phân tách nghìn, ví dụ 10000 -> 10.000.">
+                  Giá bán
+                </FieldLabel>
                 <div className="relative">
                   <input
-                    type="number"
-                    min={0}
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="off"
                     required
-                    value={form.price}
-                    onChange={(event) => set("price", event.target.value)}
+                    value={formatThousands(form.price)}
+                    onChange={(event) => set("price", digitsOnly(event.target.value))}
                     className={`${INPUT_CLASS} pr-9`}
                   />
                   <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-[#858a80]">
@@ -334,13 +339,18 @@ export function VariantFormDialog({
                 </span>
               </label>
               <label className="block">
-                <span className="mb-1.5 block text-sm font-semibold">Giá so sánh</span>
+                <FieldLabel hint="Giá trước khi giảm. Để trống nếu không có chương trình giảm giá — giá bán và giá so sánh không được bằng nhau.">
+                  Giá so sánh
+                </FieldLabel>
                 <div className="relative">
                   <input
-                    type="number"
-                    min={0}
-                    value={form.compare_at_price}
-                    onChange={(event) => set("compare_at_price", event.target.value)}
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    value={formatThousands(form.compare_at_price)}
+                    onChange={(event) =>
+                      set("compare_at_price", digitsOnly(event.target.value))
+                    }
                     className={`${INPUT_CLASS} pr-9`}
                   />
                   <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-[#858a80]">
@@ -367,7 +377,10 @@ export function VariantFormDialog({
                 onChange={(event) => set("taxable", event.target.checked)}
                 className="h-4 w-4 accent-[#527b49]"
               />
-              <span className="text-sm font-semibold">Tính thuế cho biến thể này</span>
+              <span className="flex items-center gap-1.5 text-sm font-semibold">
+                <span>Tính thuế cho biến thể này</span>
+                <InfoHint text="Bật để giá của biến thể này được tính thuế khi khách thanh toán." />
+              </span>
             </label>
           </fieldset>
 
@@ -380,7 +393,9 @@ export function VariantFormDialog({
 
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block">
-                <span className="mb-1.5 block text-sm font-semibold">SKU</span>
+                <FieldLabel hint="Mã hàng nội bộ do bạn tự đặt, dùng để tra cứu, tồn kho và đơn hàng. Nên để trống nếu chưa cần.">
+                  SKU
+                </FieldLabel>
                 <input
                   type="text"
                   value={form.sku}
@@ -390,7 +405,9 @@ export function VariantFormDialog({
                 />
               </label>
               <label className="block">
-                <span className="mb-1.5 block text-sm font-semibold">Barcode</span>
+                <FieldLabel hint="Mã vạch (EAN/UPC) in trên bao bì. Khi có Barcode, hệ thống tìm sản phẩm bằng cách quét mã.">
+                  Barcode
+                </FieldLabel>
                 <input
                   type="text"
                   value={form.barcode}
@@ -411,7 +428,10 @@ export function VariantFormDialog({
                 className="mt-0.5 h-4 w-4 accent-[#527b49]"
               />
               <span>
-                <span className="block text-sm font-semibold">Có quản lý tồn kho</span>
+                <span className="flex items-center gap-1.5 text-sm font-semibold">
+                  <span>Có quản lý tồn kho</span>
+                  <InfoHint text="Bật để Haravan theo dõi số lượng và kho hàng của biến thể này. Tắt nếu sản phẩm không giới hạn số lượng." />
+                </span>
                 <span className="block text-xs text-[#858a80]">
                   Bật để Haravan theo dõi số lượng và kho hàng của biến thể này.
                 </span>
@@ -458,7 +478,10 @@ export function VariantFormDialog({
                 <label className="flex items-start gap-3 rounded-xl border border-[#e5e7df] bg-white px-4 py-3 dark:border-[#40453b] dark:bg-[#191c18]">
                   <input type="checkbox" checked={form.inventory_policy === "continue"} onChange={(event) => set("inventory_policy", event.target.checked ? "continue" : "deny")} className="mt-0.5 h-4 w-4 accent-[#527b49]" />
                   <span>
-                    <span className="block text-sm font-semibold">Cho phép đặt hàng khi hết hàng</span>
+                    <span className="flex items-center gap-1.5 text-sm font-semibold">
+                      <span>Cho phép đặt hàng khi hết hàng</span>
+                      <InfoHint text="Bật (Continue selling) để khách vẫn đặt được khi tồn kho về 0. Tắt thì hết hàng sẽ báo không đủ hàng." />
+                    </span>
                     <span className="block text-xs text-[#858a80]">Khách vẫn có thể mua khi tồn kho về 0.</span>
                   </span>
                 </label>
@@ -482,7 +505,10 @@ export function VariantFormDialog({
                 className="mt-0.5 h-4 w-4 accent-[#527b49]"
               />
               <span>
-                <span className="block text-sm font-semibold">Cần giao hàng</span>
+                <span className="flex items-center gap-1.5 text-sm font-semibold">
+                  <span>Cần giao hàng</span>
+                  <InfoHint text="Bật để khách có thể chọn giao hàng cho sản phẩm này. Tắt với sản phẩm dịch vụ hoặc sản phẩm chỉ dùng để thu thập." />
+                </span>
                 <span className="block text-xs text-[#858a80]">
                   Chọn để cho phép giao hàng với sản phẩm này.
                 </span>
@@ -491,13 +517,16 @@ export function VariantFormDialog({
 
             {form.requires_shipping && (
               <label className="mt-4 block">
-                <span className="mb-1.5 block text-sm font-semibold">Khối lượng</span>
+                <FieldLabel hint="Trọng lượng của 1 biến thể tính bằng gram. Hệ thống dùng số này để tính phí vận chuyển.">
+                  Khối lượng
+                </FieldLabel>
                 <div className="relative sm:w-56">
                   <input
-                    type="number"
-                    min={0}
-                    value={form.grams}
-                    onChange={(event) => set("grams", event.target.value)}
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    value={formatThousands(form.grams)}
+                    onChange={(event) => set("grams", digitsOnly(event.target.value))}
                     placeholder="0"
                     className={`${INPUT_CLASS} pr-16`}
                   />
@@ -521,7 +550,9 @@ export function VariantFormDialog({
               Biến thể có nhiều đơn vị tính (ví dụ: lon, lốc, thùng...).
             </p>
             <label className="mt-3 block sm:w-72">
-              <span className="mb-1.5 block text-sm font-semibold">Đơn vị cơ bản</span>
+              <FieldLabel hint="Đơn vị nhỏ nhất của sản phẩm dùng để tính tồn kho, ví dụ: cái, lon, hộp, thùng.">
+                Đơn vị cơ bản
+              </FieldLabel>
               <input
                 type="text"
                 value={form.unit}
@@ -553,6 +584,7 @@ export function VariantFormDialog({
             </button>
             <button
               type="submit"
+              form={`variant-form-${product.id ?? 0}`}
               disabled={saving}
               className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#527b49] px-5 text-sm font-bold text-white hover:bg-[#41643a] disabled:cursor-wait disabled:opacity-60"
             >

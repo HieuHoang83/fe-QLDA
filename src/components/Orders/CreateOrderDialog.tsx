@@ -8,7 +8,8 @@ import {
   listCustomers,
   searchCustomers,
 } from "@/services/api/customers";
-import { confirmOrder, createOrder, CreateOrderInput, OrderRecord } from "@/services/api/orders";
+import { confirmOrder, createOrder, CreateOrderInput, getOrderDetails, OrderRecord, parseJobResult } from "@/services/api/orders";
+import { watchJob } from "@/services/api/job-watch";
 import { HaravanProduct, HaravanProductVariant, listProducts } from "@/services/api/products";
 import { firstImage, formatMoney, isOutOfStock, variantLabel, variantStock } from "@/lib/haravan-format";
 
@@ -346,21 +347,29 @@ export default function CreateOrderDialog({
 
     setSubmitting(true);
     try {
-      const order = await createOrder(token, orgId, body);
+      // Tạo đơn chạy qua hàng đợi: nhận `jobId` trước, chờ Haravan trả kết quả rồi
+      // mới đọc lại đơn vừa tạo.
+      const created = await createOrder(token, orgId, body);
       setOrderConfirmOpen(false);
+      const createJob = await watchJob(token, orgId, created, {
+        pendingMessage: "Đã gửi yêu cầu tạo đơn lên Haravan; đang chờ Haravan xử lý…",
+      });
+      if (!createJob || createJob.status !== "completed") {
+        return;
+      }
+      const createdOrderId = parseJobResult(createJob).haravanOrderId;
+      if (!createdOrderId) return;
+      const orderKey = { orgId: Number(orgId), haravanOrderId: createdOrderId };
+      const order = (await getOrderDetails(token, orderKey)).order;
       if (confirmAfterCreate) {
         try {
           const confirmation = await confirmOrder(token, order, "Tạo đơn hàng");
-          if (confirmation.confirmed) {
-            toast.success(`Đã tạo và gửi xác thực đơn ${order.orderName ?? order.orderNumber ?? order.haravanOrderId}.`);
-          } else {
-            toast.warning(`Đơn ${order.orderName ?? order.orderNumber ?? order.haravanOrderId} đã tạo nhưng chưa xác thực được.`);
-          }
+          await watchJob(token, Number(orgId), confirmation, {
+            pendingMessage: "Đã gửi yêu cầu xác nhận đơn; đang chờ Haravan xử lý…",
+          });
         } catch {
-          toast.warning("Đơn hàng đã được tạo, nhưng chưa gửi được yêu cầu xác thực. Bạn có thể xác thực lại trong danh sách đơn.");
+          toast.warning("Đơn hàng đã được tạo, nhưng chưa gửi được yêu cầu xác nhận. Bạn có thể xác nhận lại trong danh sách đơn.");
         }
-      } else {
-        toast.success(`Đã tạo đơn ${order.orderName ?? order.orderNumber ?? order.haravanOrderId}.`);
       }
       onCreated(order);
     } catch (error) {

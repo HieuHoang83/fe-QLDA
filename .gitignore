@@ -40,3 +40,4 @@ tmpcheck*/
 _p*.cjs
 _p*.mjs
 *.stackdump
+dev-server.log

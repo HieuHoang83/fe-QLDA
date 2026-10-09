@@ -10,7 +10,6 @@ import {
   formatMoney,
   isOutOfStock,
   variantImage,
-  variantLabel,
   variantStock,
 } from "@/lib/haravan-format";
 
@@ -161,21 +160,19 @@ export default function VariantPicker({
 
       {selectedVariant && (
         <div className="rounded-2xl border border-[#e8e9e2] bg-[#fafbf8] p-4 dark:border-[#363b31] dark:bg-[#191c18]">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-xs uppercase tracking-[0.12em] text-[#858a80]">
-                Biến thể đã chọn
-              </p>
-              <p className="mt-0.5 font-semibold">{variantLabel(selectedVariant)}</p>
-            </div>
-            {outOfStock && (
+          {outOfStock && (
+            <div className="flex justify-end">
               <span className="rounded-full bg-[#f0d6d2] px-3 py-1 text-xs font-bold text-[#aa382f] dark:bg-[#54312d] dark:text-[#ffb7af]">
                 Hết hàng
               </span>
-            )}
-          </div>
+            </div>
+          )}
 
-          <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
+          <div
+            className={`flex flex-wrap items-end justify-between gap-4 ${
+              outOfStock ? "" : "mt-4"
+            }`}
+          >
             <div>
               <p className="mb-1.5 text-xs font-semibold text-[#858a80]">Số lượng</p>
               <div className="flex items-center gap-1">

@@ -18,6 +18,24 @@ export function formatDate(value?: string | null): string {
   });
 }
 
+/** Chỉ giữ lại chữ số, dùng khi người dùng gõ vào ô nhập tiền/số lượng. */
+export function digitsOnly(value: string): string {
+  return value.replace(/[^0-9]/g, "");
+}
+
+/**
+ * Hiển thị số khi đang gõ: "10000" -> "10.000".
+ * Chuỗi rỗng trả về rỗng để ô nhập không hiện số 0.
+ */
+export function formatThousands(digits: string): string {
+  const value = digitsOnly(digits);
+  if (!value) return "";
+  if (value.length > 15) {
+    return value.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  }
+  return new Intl.NumberFormat("vi-VN").format(Number(value));
+}
+
 export function firstImage(images?: Array<{ src?: string }>): string | undefined {
   return images?.find((image) => image?.src)?.src;
 }
@@ -62,13 +80,19 @@ export interface VariantLike {
   inventory_advance?: { qty_available?: number };
 }
 
+/** Haravan tự sinh tên "Default Title" cho biến thể đơn giản. */
+export function isDefaultVariantTitle(title?: string | null): boolean {
+  const value = (title ?? "").trim().toLowerCase();
+  return value === "default title" || value === "mặc định" || value === "mac dinh";
+}
+
 /** Ghép option1..3 thành nhãn variant, fallback title. */
 export function variantLabel(variant: VariantLike): string {
   const label = [variant.option1, variant.option2, variant.option3]
     .filter((value): value is string => Boolean(value && String(value).trim()))
     .join(" / ");
   if (label) return label;
-  if (variant.title && variant.title !== "Default Title") return variant.title;
+  if (variant.title && !isDefaultVariantTitle(variant.title)) return variant.title;
   return "Mặc định";
 }
 

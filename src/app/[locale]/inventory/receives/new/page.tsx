@@ -548,7 +548,7 @@ export default function InventoryReceivePage() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1050px] text-sm">
+            <table className="w-full min-w-[1120px] text-sm">
               <thead className="bg-[#f8f9f6] text-left text-xs font-bold uppercase tracking-wide text-[#66705f] dark:bg-[#191c18] dark:text-[#c5cbbd]"><tr><th className="px-4 py-3">Sản phẩm</th><th className="px-4 py-3 text-right">Tồn kho</th><th className="px-4 py-3">Số lượng nhập</th><th className="px-4 py-3">Đơn giá</th><th className="px-4 py-3">Giảm giá</th><th className="px-4 py-3 text-right">Thành tiền</th><th className="px-4 py-3" /></tr></thead>
               <tbody className="divide-y divide-[#eef0ea] dark:divide-[#363b31]">
                 {lines.map((line) => {
@@ -557,7 +557,7 @@ export default function InventoryReceivePage() {
                   return <tr key={line.key}>
                     <td className="px-4 py-4"><div className="flex min-w-[260px] items-center gap-3">{image ? <img src={image} alt="" className="h-12 w-12 rounded-lg border border-[#e6e9df] object-cover" /> : <span className="grid h-12 w-12 place-items-center rounded-lg bg-[#f3f5ef]"><i className="pi pi-image text-[#a1a89a]" /></span>}<div className="min-w-0"><p className="truncate font-semibold">{line.product.title}</p><p className="truncate text-xs text-[#66705f]">{variantLabel(line.variant)}</p><p className="truncate text-xs text-[#858a80]">SKU: {line.variant.sku || "—"}</p></div></div></td>
                     <td className="px-4 py-4 text-right tabular-nums">{locationStock[line.key] ?? "—"}</td>
-                    <td className="px-4 py-4"><FormattedNumberInput className={`${INPUT} w-28`} min={1} step={1} value={line.quantity} onChange={(value) => updateLine(line.key, "quantity", value)} />{purchaseOrder && <p className="mt-1 text-[11px] text-[#858a80]">Còn được nhận: {purchaseOrderRemaining[String(line.variant.id)] ?? 0}</p>}</td>
+                    <td className="px-4 py-4"><div className="flex items-center gap-1 whitespace-nowrap"><FormattedNumberInput ariaLabel={`Số lượng nhập ${line.product.title}`} className={`${INPUT} w-24`} min={1} step={1} value={line.quantity} onChange={(value) => updateLine(line.key, "quantity", value)} />{purchaseOrder && <span title="Còn được nhận" className="text-xs tabular-nums text-[#858a80]">/ {purchaseOrderRemaining[String(line.variant.id)] ?? 0}</span>}</div></td>
                     <td className="px-4 py-4"><FormattedNumberInput className={`${INPUT} w-36`} min={0} value={line.cost} onChange={(value) => updateLine(line.key, "cost", value)} /></td>
                     <td className="px-4 py-4"><FormattedNumberInput ariaLabel={`Giảm giá mỗi sản phẩm ${line.product.title}`} className={`${INPUT} w-32`} min={0} value={line.discount} onChange={(value) => updateLine(line.key, "discount", value)} /></td>
                     <td className="px-4 py-4 text-right font-bold tabular-nums">{formatMoney(total)}</td>

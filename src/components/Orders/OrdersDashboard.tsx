@@ -19,6 +19,7 @@ import HaravanShell from "@/components/haravan/HaravanShell";
 import CreateOrderDialog from "./CreateOrderDialog";
 import OrdersTable from "./OrdersTable";
 import { ConfirmationStatus, orderCode } from "./orders.utils";
+import { watchJob } from "@/services/api/job-watch";
 
 function localDayBoundary(value: string, dayOffset = 0) {
   const [year, month, day] = value.split("-").map(Number);
@@ -155,17 +156,13 @@ export default function OrdersDashboard() {
     const key = `${order.orgId}:${order.haravanOrderId}`;
     setConfirmingOrder(key);
     try {
-      const result = await confirmOrder(session.access_token, order, session.user.phone);
-      if (result.confirmed) {
-        toast.success(
-          `Đã gửi yêu cầu xác nhận đơn ${orderCode(order)}; đang chờ trạng thái cập nhật từ Haravan.`
-        );
-      } else {
-        toast.warning(
-          `Đơn ${orderCode(order)} chưa được xác nhận. Vui lòng kiểm tra trạng thái xử lý.`
-        );
-      }
-      await loadOrders();
+      const accepted = await confirmOrder(session.access_token, order, session.user.phone);
+      await watchJob(session.access_token, order.orgId, accepted, {
+        pendingMessage: `Đã gửi yêu cầu xác nhận đơn ${orderCode(order)}; đang chờ Haravan xử lý…`,
+        onSettled: () => {
+          void loadOrders();
+        },
+      });
     } catch (confirmError) {
       toast.error(
         confirmError instanceof Error

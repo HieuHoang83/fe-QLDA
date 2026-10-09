@@ -25,6 +25,7 @@ export interface ListVariantsParams {
 export type VariantPayload = Partial<
   Pick<
     HaravanProductVariant,
+    | "title"
     | "sku"
     | "barcode"
     | "option1"

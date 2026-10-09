@@ -3,6 +3,7 @@ import type {
   HaravanProductVariant,
 } from "@/services/api/products";
 import type { VariantPayload } from "@/services/api/variants";
+import { isDefaultVariantTitle } from "@/lib/haravan-format";
 
 export const MAX_VARIANTS = 100;
 
@@ -17,6 +18,7 @@ export interface VariantSavePayload {
 }
 
 export interface VariantFormState {
+  title: string;
   sku: string;
   option1: string;
   option2: string;
@@ -35,6 +37,7 @@ export interface VariantFormState {
 
 export function emptyForm(): VariantFormState {
   return {
+    title: "",
     sku: "",
     option1: "",
     option2: "",
@@ -58,6 +61,7 @@ export function baseUnit(variant?: HaravanProductVariant | null): string {
 
 export function fromVariant(variant: HaravanProductVariant): VariantFormState {
   return {
+    title: variant.title && !isDefaultVariantTitle(variant.title) ? variant.title : "",
     sku: variant.sku ?? "",
     option1: variant.option1 ?? "",
     option2: variant.option2 ?? "",
@@ -111,6 +115,7 @@ export function toPayload(form: VariantFormState, hadUnits: boolean): VariantPay
         ? []
         : undefined;
   return {
+    title: form.title.trim() || undefined,
     sku: form.sku.trim() || undefined,
     barcode: form.barcode.trim() || undefined,
     option1: form.option1.trim() || undefined,
