@@ -20,12 +20,16 @@ import {
 import {
   countCustomers,
   createAddress,
-  createCustomer,
+  createCustomerJob,
   listCustomers,
-  searchCustomers,
-  updateCustomer,
+  searchCustomersLocal,
+  toHaravanCustomer,
+  updateCustomerJob,
   type HaravanCustomer,
+  type CustomerSearchResult,
 } from "@/services/api/customers";
+import { watchJob } from "@/services/api/job-watch";
+import { parseJobResult } from "@/services/api/orders";
 import { hasAddressContent, type GeoAddressValue } from "@/components/Customers/AddressGeoFields";
 import { formatDate, formatMoney } from "@/lib/haravan-format";
 
@@ -40,6 +44,8 @@ export default function CustomersPage() {
   const [pageSize, setPageSize] = useState(20);
   const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchMeta, setSearchMeta] =
+    useState<CustomerSearchResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [creating, setCreating] = useState(false);
@@ -53,7 +59,22 @@ export default function CustomersPage() {
     setPage(1);
     setSearchInput("");
     setSearchQuery("");
+    setSearchMeta(null);
   }, [orgId]);
+
+  /**
+   * Chay tim kiem sau khi nguoi dung ngung go.
+   *
+   * Tim ba so cuoi rat de so trung so ma nguoi dung thuong ngay go truc tiep, nen khong
+   * bat buoc bam nut "Tim".
+   */
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setPage(1);
+      setSearchQuery(searchInput.trim());
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
   const load = useCallback(async () => {
     if (!token || !orgId) return;
@@ -61,15 +82,16 @@ export default function CustomersPage() {
     setError("");
     try {
       if (searchQuery) {
-        const result = await searchCustomers(token, orgId, {
-          query: searchQuery,
+        const result = await searchCustomersLocal(token, orgId, {
+          q: searchQuery,
           page,
           limit: pageSize,
         });
-        const items = result.customers ?? [];
-        setCustomers(items);
-        setTotal(page * pageSize + (items.length === pageSize ? 1 : 0));
+        setSearchMeta(result);
+        setCustomers(result.items.map(toHaravanCustomer));
+        setTotal(result.total);
       } else {
+        setSearchMeta(null);
         const [list, count] = await Promise.all([
           listCustomers(token, orgId, { page, limit: pageSize }),
           countCustomers(token, orgId),
@@ -135,7 +157,7 @@ export default function CustomersPage() {
     setSaving(true);
     try {
       if (editing?.id) {
-        const result = await updateCustomer(token, orgId, editing.id, {
+        const accepted = await updateCustomerJob(token, orgId, editing.id, {
           first_name: form.first_name,
           last_name: form.last_name,
           email: form.email,
@@ -143,19 +165,18 @@ export default function CustomersPage() {
           tags: form.tags,
           note: form.note,
         });
-        setCustomers((prev) =>
-          prev.map((customer) =>
-            customer.id === result.customer.id ? result.customer : customer
-          )
-        );
         setEditing(null);
-        toast.success(
-          `Đã cập nhật khách hàng "${customerName(result.customer)}".`
-        );
+
+        // Dữ liệu trong bảng được webhook `customers/update` đưa về, nên tải lại sau khi job xong.
+        await watchJob(token, orgId, accepted, {
+          pendingMessage: "Đang gửi yêu cầu cập nhật lên Haravan…",
+          successMessage: `Đã cập nhật khách hàng "${customerName(editing)}".`,
+          onSettled: () => refresh(),
+        });
         return;
       }
 
-      const result = await createCustomer(token, orgId, {
+      const accepted = await createCustomerJob(token, orgId, {
         first_name: form.first_name,
         last_name: form.last_name,
         ...(form.email.trim() ? { email: form.email.trim() } : {}),
@@ -164,10 +185,23 @@ export default function CustomersPage() {
         note: form.note,
       });
 
+      const job = await watchJob(token, orgId, accepted, {
+        pendingMessage: "Đang tạo khách hàng trên Haravan…",
+      });
+
+      if (!job || job.status === "failed") return;
+
+      // Worker ghi kèm mã khách Haravan vào kết quả job để tạo địa chỉ ngay sau đó.
+      const haravanCustomerId = parseJobResult(job).haravanCustomerId;
+      const nameLabel =
+        [form.last_name, form.first_name].filter(Boolean).join(" ").trim() ||
+        form.email ||
+        form.phone;
+
       let addressNote = "";
-      if (hasAddressContent(address) && result.customer.id != null) {
+      if (hasAddressContent(address) && haravanCustomerId != null) {
         try {
-          await createAddress(token, orgId, result.customer.id, {
+          await createAddress(token, orgId, haravanCustomerId, {
             first_name: form.first_name,
             last_name: form.last_name,
             phone: form.phone,
@@ -194,17 +228,11 @@ export default function CustomersPage() {
       }
 
       setCreating(false);
-      toast.success(
-        `Đã tạo khách hàng "${customerName(result.customer)}".`,
-        {
-          description: [
-            result.customer.email || result.customer.phone || "",
-            addressNote,
-          ]
-            .filter(Boolean)
-            .join(" — "),
-        }
-      );
+      toast.success(`Đã tạo khách hàng "${nameLabel}".`, {
+        description: [form.email || form.phone || "", addressNote]
+          .filter(Boolean)
+          .join(" — "),
+      });
       refresh();
     } catch (saveError) {
       toast.error(
@@ -367,8 +395,12 @@ export default function CustomersPage() {
         minWidth={1400}
         paginationLabel="khách hàng"
         emptyIcon="pi-users"
-        emptyTitle="Không có khách hàng"
-        emptyHint="Thử đổi từ khóa tìm kiếm hoặc shop."
+        emptyTitle={
+          searchMeta?.hint
+            ? "Chưa tìm được khách phù hợp"
+            : "Không có khách hàng"
+        }
+        emptyHint={searchMeta?.hint ?? "Thử đổi từ khóa tìm kiếm hoặc shop."}
         onPageChange={setPage}
         onPageSizeChange={(value) => {
           setPageSize(value);
@@ -390,7 +422,7 @@ export default function CustomersPage() {
                   type="search"
                   value={searchInput}
                   onChange={(event) => setSearchInput(event.target.value)}
-                  placeholder="Tên, email hoặc số điện thoại..."
+                  placeholder="Tên, email, số điện thoại hoặc 3 số cuối (vd: 633)"
                   className="h-11 w-full rounded-xl border border-[#e5e7df] bg-[#fbfbf9] pl-11 pr-3 text-sm outline-none focus:border-[#7c9f70] focus:ring-2 focus:ring-[#7c9f70]/15 dark:border-[#40453b] dark:bg-[#191c18]"
                 />
               </label>
@@ -415,9 +447,21 @@ export default function CustomersPage() {
                 {loading
                   ? "Đang tải..."
                   : searchQuery
-                    ? "Kết quả tìm kiếm"
+                    ? `${total} kết quả`
                     : `${total} khách hàng`}
               </span>
+              {searchQuery && searchMeta?.mode === "phone_suffix" && (
+                <span className="rounded-full bg-[#eef3ea] px-3 py-1 text-xs font-semibold text-[#466d40] dark:bg-[#26301f] dark:text-[#b7d7a5]">
+                  3 số cuối
+                </span>
+              )}
+              {searchQuery && searchMeta && (
+                <span className="text-xs text-[#9aa094] dark:text-[#8b9184]">
+                  {searchMeta.engine === "elasticsearch"
+                    ? "Elasticsearch"
+                    : "MongoDB"}
+                </span>
+              )}
               <button
                 type="button"
                 onClick={() => setCreating(true)}

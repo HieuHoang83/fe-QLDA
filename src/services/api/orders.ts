@@ -206,6 +206,8 @@ export interface JobStatus {
 export interface JobResult {
   message?: string;
   haravanOrderId?: number;
+  /** Job tạo/sửa khách trả về mã khách để FE tạo địa chỉ ngay sau đó. */
+  haravanCustomerId?: number;
   confirmed?: boolean;
 }
 

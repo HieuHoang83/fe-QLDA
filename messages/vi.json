@@ -1,17 +1,34 @@
 {
-    "HomePage":  {
-                     "welcome_message":  "KHAI PHÓNG TIỀM NĂNG HỌC THUẬT. CHIA SẺ, KHÁM PHÁ, LÀM CHỦ.",
-                     "sub_message":  "Trung tâm tài liệu dành cho sinh viên đại học. Tìm kiếm tệp bạn cần, chia sẻ những gì bạn biết."
-                 },
-    "LoginPage":  {
-                      "title1":  "Bạn là người mới?",
-                      "title2":  "Tham gia vào Trạm thông minh.",
-                      "title3":  "Chưa đến một phút để truy cập vào vô vàn tài nguyên.",
-                      "forget":  "Quên khóa truy cập?",
-                      "Or Sign Up":  "Hoặc Xác thực Sử dụng"
-                  },
-    "RegisterPage":  {
-                         "title1":  "Đã là một học giả?",
-                         "title2":  "Đăng nhập tại đây"
-                     }
+  "HomePage": {
+    "welcome_message": "KHAI PHÓNG TIỀM NĂNG HỌC THUẬT. CHIA SẺ, KHÁM PHÁ, LÀM CHỦ.",
+    "sub_message": "Trung tâm tài liệu dành cho sinh viên đại học. Tìm kiếm tệp bạn cần, chia sẻ những gì bạn biết."
+  },
+  "LoginPage": {
+    "title1": "Bạn là người mới?",
+    "title2": "Tham gia vào Trạm thông minh.",
+    "title3": "Chưa đến một phút để truy cập vào vô vàn tài nguyên.",
+    "forget": "Quên khóa truy cập?",
+    "Or Sign Up": "Hoặc Xác thực Sử dụng",
+    "phone": "Số điện thoại",
+    "phonePlaceholder": "Nhập số điện thoại...",
+    "password": "Mật khẩu",
+    "passwordPlaceholder": "Nhập mật khẩu...",
+    "login": "Đăng nhập",
+    "loggingIn": "Đang đăng nhập...",
+    "phoneRequired": "Số điện thoại là bắt buộc",
+    "passwordRequired": "Mật khẩu là bắt buộc",
+    "missingCredentials": "Vui lòng nhập số điện thoại và mật khẩu",
+    "invalidCredentials": "Số điện thoại hoặc mật khẩu không đúng",
+    "orContinue": "Hoặc đăng nhập bằng",
+    "haravanHint": "Dùng tài khoản Haravan của bạn, không cần mật khẩu",
+    "haravanSigningIn": "Đang hoàn tất đăng nhập bằng Haravan...",
+    "haravanDenied": "Bạn đã từ chối đăng nhập bằng Haravan",
+    "haravanNoTicket": "Không tìm thấy mã đăng nhập. Hãy thử lại từ đầu.",
+    "haravanFailed": "Đăng nhập bằng Haravan không thành công",
+    "backToLogin": "Quay lại trang đăng nhập"
+  },
+  "RegisterPage": {
+    "title1": "Đã là một học giả?",
+    "title2": "Đăng nhập tại đây"
+  }
 }

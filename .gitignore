@@ -11,6 +11,7 @@
 
 # next.js
 /.next/
+/.next.*/
 /out/
 
 # production
@@ -40,4 +41,8 @@ tmpcheck*/
 _p*.cjs
 _p*.mjs
 *.stackdump
-dev-server.log
+# log cua may: dev server, build
+dev-server*.log
+*.build.log
+*-build*.log
+tsconfig.tsbuildinfo

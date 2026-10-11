@@ -1,4 +1,7 @@
-import { haravanRequest } from "./haravan";
+import axios from "axios";
+
+import { getHaravanErrorMessage, haravanRequest } from "./haravan";
+import type { JobAccepted } from "./orders";
 
 export interface HaravanCustomerAddress {
   id?: number;
@@ -247,4 +250,176 @@ export function setAddressDefault(
     token,
     { method: "PUT", body: {} }
   );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Tim kiem khach bang bo tim kiem cua BE                                     */
+/* -------------------------------------------------------------------------- */
+
+const configuredBaseUrl =
+  process.env.NEXT_PUBLIC_QLDAPM_API_URL ??
+  process.env.NEXT_PUBLIC_API_URL ??
+  "http://localhost:3000";
+const apiOrigin = configuredBaseUrl
+  .trim()
+  .replace(/\/+$/, "")
+  .replace(/\/api(?:\/v1)?$/, "");
+const customersBaseUrl = `${apiOrigin}/api/v1/customers`;
+
+/** Mot khach sau khi qua bo tim kiem (Elasticsearch, lui ve MongoDB neu can). */
+export interface CustomerSearchHit {
+  id: string;
+  orgId: number;
+  haravanCustomerId?: number;
+  fullName?: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  /** Ba so cuoi cua so dien thoai, dung cho viet nhanh tren bang ket qua. */
+  phoneSuffix3?: string;
+  state?: string;
+  ordersCount: number;
+  totalSpent: number;
+  lastOrderName?: string;
+  firstSeenAt?: string;
+  lastSeenAt?: string;
+}
+
+/** Che do hieu dung chuoi nguoi dung nhap, do BE quyet dinh. */
+export type CustomerSearchMode =
+  | "empty"
+  | "invalid"
+  | "phone_suffix"
+  | "phone_prefix"
+  | "text";
+
+export interface CustomerSearchResult {
+  items: CustomerSearchHit[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+  mode: CustomerSearchMode;
+  /** He so da tra loi; hien huu ich khi moi bat Elasticsearch. */
+  engine: "elasticsearch" | "mongodb";
+  hint?: string;
+}
+
+export interface LocalSearchCustomersParams {
+  q: string;
+  page?: number;
+  limit?: number;
+  kind?: "returning" | "first_time" | "all";
+  sort?: "newest" | "lastSeen" | "spent" | "orders";
+}
+
+export function searchCustomersLocal(
+  token: string,
+  orgId: string,
+  params: LocalSearchCustomersParams
+): Promise<CustomerSearchResult> {
+  return apiRequest<CustomerSearchResult>(token, "/search", {
+    params: {
+      orgId,
+      q: params.q,
+      page: params.page,
+      limit: params.limit,
+      kind: params.kind,
+      sort: params.sort,
+    },
+  });
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Tao / sua khach: day vao hang doi cong viec, BE lo phan gui len Haravan       */
+/* -------------------------------------------------------------------------- */
+
+export interface CustomerJobBody {
+  first_name?: string;
+  last_name?: string;
+  phone?: string;
+  email?: string;
+  tags?: string;
+  note?: string;
+  state?: string;
+}
+
+/**
+ * Tao khach tren Haravan.
+ *
+ * BE tra ve `202` kem `jobId` ngay, khong doi Haravan xong; FE dung `watchJob` de theo doi.
+ * Sau khi Haravan xu ly xong, no gui webhook ve BE de BE ghi MongoDB + Elasticsearch.
+ */
+export function createCustomerJob(
+  token: string,
+  orgId: string,
+  body: CustomerJobBody
+): Promise<JobAccepted> {
+  return apiRequest<JobAccepted>(token, `/${encodeURIComponent(orgId)}/create`, {
+    method: "POST",
+    body,
+  });
+}
+
+/** Sua khach tren Haravan qua cung co che hang doi cong viec. */
+export function updateCustomerJob(
+  token: string,
+  orgId: string,
+  customerId: number,
+  body: CustomerJobBody
+): Promise<JobAccepted> {
+  return apiRequest<JobAccepted>(
+    token,
+    `/${encodeURIComponent(orgId)}/${encodeURIComponent(customerId)}/update`,
+    { method: "PUT", body }
+  );
+}
+
+/**
+ * Dua ket qua tim kiem ve dung hinh du lieu cua bang, de cac cot hien thi dung mot API
+ * khac nhau khong phai sua lai bang.
+ */
+export function toHaravanCustomer(hit: CustomerSearchHit): HaravanCustomer {
+  return {
+    id: hit.haravanCustomerId,
+    // `customerName` ghep `last_name` + `first_name`; dat `fullName` vao `first_name` de
+    // khach chi co ten day du van hien thi dung.
+    first_name: hit.firstName ?? hit.fullName,
+    last_name: hit.lastName,
+    email: hit.email,
+    phone: hit.phone,
+    state: hit.state,
+    orders_count: hit.ordersCount,
+    total_spent: hit.totalSpent,
+    last_order_name: hit.lastOrderName,
+    created_at: hit.firstSeenAt,
+  };
+}
+
+async function apiRequest<T>(
+  token: string,
+  path: string,
+  options: {
+    params?: Record<string, string | number | undefined>;
+    method?: "GET" | "POST" | "PUT";
+    body?: object;
+  } = {}
+): Promise<T> {
+  try {
+    const response = await axios.request<{ data: T }>({
+      baseURL: customersBaseUrl,
+      url: path,
+      method: options.method ?? "GET",
+      params: options.params,
+      data: options.body,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    });
+    return response.data.data;
+  } catch (error) {
+    throw new Error(getHaravanErrorMessage(error));
+  }
 }

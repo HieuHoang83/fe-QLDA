@@ -1,17 +1,34 @@
 {
-    "HomePage":  {
-                     "welcome_message":  "UNLEASH YOUR ACADEMIC POTENTIAL. SHARE, DISCOVER, MASTER.",
-                     "sub_message":  "The definitive resource hub for university students. Find the files you need, share what you know."
-                 },
-    "LoginPage":  {
-                      "title1":  "Are you new here?",
-                      "title2":  "Join the Intelligence Layer.",
-                      "title3":  "Less than a minute to infinite resources.",
-                      "forget":  "Lost your access key?",
-                      "Or Sign Up":  "Or Authenticate Using"
-                  },
-    "RegisterPage":  {
-                         "title1":  "Already a scholar?",
-                         "title2":  "Log In Here"
-                     }
+  "HomePage": {
+    "welcome_message": "UNLEASH YOUR ACADEMIC POTENTIAL. SHARE, DISCOVER, MASTER.",
+    "sub_message": "The definitive resource hub for university students. Find the files you need, share what you know."
+  },
+  "LoginPage": {
+    "title1": "Are you new here?",
+    "title2": "Join the Intelligence Layer.",
+    "title3": "Less than a minute to infinite resources.",
+    "forget": "Lost your access key?",
+    "Or Sign Up": "Or Authenticate Using",
+    "phone": "Phone number",
+    "phonePlaceholder": "Enter phone number...",
+    "password": "Password",
+    "passwordPlaceholder": "Enter password...",
+    "login": "Sign in",
+    "loggingIn": "Signing in...",
+    "phoneRequired": "Phone number is required",
+    "passwordRequired": "Password is required",
+    "missingCredentials": "Please enter your phone number and password",
+    "invalidCredentials": "Phone number or password is incorrect",
+    "orContinue": "Or continue with",
+    "haravanHint": "Use your Haravan account, no password needed",
+    "haravanSigningIn": "Finishing Haravan sign in...",
+    "haravanDenied": "You declined to sign in with Haravan",
+    "haravanNoTicket": "No sign-in code found. Please try again from the start.",
+    "haravanFailed": "Haravan sign in was not successful",
+    "backToLogin": "Back to sign in"
+  },
+  "RegisterPage": {
+    "title1": "Already a scholar?",
+    "title2": "Log In Here"
+  }
 }

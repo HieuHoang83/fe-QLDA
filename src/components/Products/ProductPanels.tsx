@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-/** Khung panel dÃ¹ng chung: tieu de + noi dung. */
+/** Khung panel dùng chung: tieu de + noi dung. */
 export function Frame({
   title,
   icon,

@@ -16,6 +16,7 @@ import {
   OrderRecord,
 } from "@/services/api/orders";
 import HaravanShell from "@/components/haravan/HaravanShell";
+import HaravanLoginButton from "@/components/auth/HaravanLoginButton";
 import CreateOrderDialog from "./CreateOrderDialog";
 import OrdersTable from "./OrdersTable";
 import { ConfirmationStatus, orderCode } from "./orders.utils";
@@ -78,6 +79,8 @@ function LoginForm() {
           <button type="submit" disabled={submitting} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#527b49] px-5 text-sm font-bold text-white transition hover:bg-[#41643a] disabled:cursor-wait disabled:opacity-60">
             {submitting ? <><i className="pi pi-spin pi-spinner" aria-hidden="true" /> Đang đăng nhập...</> : <>Đăng nhập <i className="pi pi-arrow-right" aria-hidden="true" /></>}
           </button>
+          {/* Cach 2: tai khoan Haravan (Haravan Connect). */}
+          <HaravanLoginButton />
         </form>
       </section>
     </main>
@@ -327,7 +330,7 @@ export default function OrdersDashboard() {
           <footer className="flex shrink-0 flex-col gap-3 border-t border-[#eeefe9] px-5 py-4 dark:border-[#363b31] sm:flex-row sm:items-center sm:justify-between sm:px-6">
             <div className="flex flex-wrap items-center gap-3">
               <label className="flex items-center gap-2 text-sm text-[#73796f] dark:text-[#b3b9ad]">
-                <span>Hiển thị</span>
+                <span>Hiá»ƒn thá»‹</span>
                 <select
                   aria-label="Số đơn hàng mỗi trang"
                   value={pageSize}
@@ -336,19 +339,19 @@ export default function OrdersDashboard() {
                 >
                   {[10, 20, 50, 100].map((size) => <option key={size} value={size}>{size}</option>)}
                 </select>
-                <span>mỗi trang</span>
+                <span>má»—i trang</span>
               </label>
               <p className="text-sm text-[#858a80] dark:text-[#aeb4a8]">
                 {total === 0 ? "Không có đơn hàng" : `Hiển thị ${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, total)} trên ${total} đơn`}
               </p>
             </div>
             <nav aria-label="Phân trang đơn hàng" className="flex items-center gap-1">
-              <button type="button" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page === 1 || loading} aria-label="Trang trước" className="grid h-9 w-9 place-items-center rounded-lg border border-[#e5e7df] text-sm disabled:opacity-40 dark:border-[#40453b]">
+              <button type="button" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page === 1 || loading} aria-label="Trang trÆ°á»›c" className="grid h-9 w-9 place-items-center rounded-lg border border-[#e5e7df] text-sm disabled:opacity-40 dark:border-[#40453b]">
                 <i className="pi pi-angle-left" aria-hidden="true" />
               </button>
               {pageNumbers.map((number, index) => (
                 <span key={number} className="contents">
-                  {index > 0 && number - pageNumbers[index - 1] > 1 && <span className="px-1 text-[#92988d]">…</span>}
+                  {index > 0 && number - pageNumbers[index - 1] > 1 && <span className="px-1 text-[#92988d]">â€¦</span>}
                   <button type="button" onClick={() => setPage(number)} aria-current={page === number ? "page" : undefined} className={`grid h-9 min-w-9 place-items-center rounded-lg px-2 text-sm font-semibold ${page === number ? "bg-[#527b49] text-white" : "text-[#62685e] hover:bg-[#f5f6f2] dark:text-[#d3d8ce] dark:hover:bg-[#30342e]"}`}>
                     {number}
                   </button>
